@@ -59,6 +59,11 @@ ELSE (MEMORY_ALLOCATOR)
    SET(MALLOC_LIBRARIES "")
 ENDIF (MEMORY_ALLOCATOR)
 
+IF (BREAKPAD_FOUND)
+   ADD_DEFINITIONS(-DHAVE_BREAKPAD)
+   INCLUDE_DIRECTORIES(AFTER ${BREAKPAD_INCLUDE_DIR})
+ENDIF (BREAKPAD_FOUND)
+
 IF (APPLE)
    SET(MEMORY_TRACKING_SRCS daemon/alloc_hooks.c
                             daemon/alloc_hooks.h
@@ -151,6 +156,8 @@ ADD_EXECUTABLE(mcctl programs/mcctl.c
                      programs/utilities.h
                      utilities/util.c)
 
+set_source_files_properties(daemon/breakpad.cc PROPERTIES COMPILE_FLAGS -std=gnu++0x)
+
 ADD_EXECUTABLE(mcbucket programs/mcbucket.c
                      programs/utilities.c
                      programs/utilities.h
@@ -160,6 +167,7 @@ ADD_EXECUTABLE(mchello programs/mchello.c
                        programs/utilities.h)
 ADD_EXECUTABLE(memcached_sizes tests/sizes.c)
 ADD_EXECUTABLE(memcached
+               daemon/breakpad.cc
                ${MEMORY_TRACKING_SRCS}
                daemon/cache.c
                daemon/cmdline.c
@@ -297,7 +305,7 @@ TARGET_LINK_LIBRARIES(tap_mock_engine platform ${COUCHBASE_NETWORK_LIBS})
 TARGET_LINK_LIBRARIES(testapp_extension mcd_util platform ${COUCHBASE_NETWORK_LIBS})
 
 TARGET_LINK_LIBRARIES(mcd_util platform)
-TARGET_LINK_LIBRARIES(memcached auditd mcd_util cbsasl platform cJSON JSON_checker ${SNAPPY_LIBRARIES} ${MALLOC_LIBRARIES} ${LIBEVENT_LIBRARIES} ${OPENSSL_LIBRARIES} ${COUCHBASE_NETWORK_LIBS})
+TARGET_LINK_LIBRARIES(memcached auditd mcd_util cbsasl platform cJSON JSON_checker ${SNAPPY_LIBRARIES} ${MALLOC_LIBRARIES} ${LIBEVENT_LIBRARIES} ${OPENSSL_LIBRARIES} ${COUCHBASE_NETWORK_LIBS} ${BREAKPAD_LIBRARIES})
 TARGET_LINK_LIBRARIES(memcached_testapp mcd_util cbsasl cJSON platform ${SNAPPY_LIBRARIES} ${LIBEVENT_LIBRARIES} ${COUCHBASE_NETWORK_LIBS} ${OPENSSL_LIBRARIES})
 
 TARGET_LINK_LIBRARIES(file_logger platform)
