@@ -62,6 +62,11 @@ ENDIF (MEMORY_ALLOCATOR)
 IF (BREAKPAD_FOUND)
    ADD_DEFINITIONS(-DHAVE_BREAKPAD)
    INCLUDE_DIRECTORIES(AFTER ${BREAKPAD_INCLUDE_DIR})
+
+   # Set compile flags to comply with C++ code for breakpad.cc
+   set_source_files_properties(daemon/breakpad.cc PROPERTIES COMPILE_FLAGS -std=gnu++0x)
+
+   SET(BREAKPAD_SRCS daemon/breakpad.cc)
 ENDIF (BREAKPAD_FOUND)
 
 IF (APPLE)
@@ -167,7 +172,7 @@ ADD_EXECUTABLE(mchello programs/mchello.c
                        programs/utilities.h)
 ADD_EXECUTABLE(memcached_sizes tests/sizes.c)
 ADD_EXECUTABLE(memcached
-               daemon/breakpad.cc
+               ${BREAKPAD_SRCS}
                ${MEMORY_TRACKING_SRCS}
                daemon/cache.c
                daemon/cmdline.c

@@ -26,9 +26,7 @@
 #include "mc_time.h"
 #include "cJSON.h"
 #include "utilities/protocol2text.h"
-// #if defined(HAVE_BREAKPAD)
-  #include "breakpad.h"
-// #endif
+#include "breakpad.h"
 
 #include <signal.h>
 #include <fcntl.h>
@@ -8056,7 +8054,7 @@ static void load_extensions(void) {
     }
 }
 
-int main (int argc, char **argv) {
+int main (int argc, char **argv)
     ENGINE_HANDLE *engine_handle = NULL;
 
     initialize_breakpad();
