@@ -9,6 +9,7 @@
 #include <time.h>
 #include <errno.h>
 #include <platform/platform.h>
+#include <cJSON.h>
 
 #include "genhash.h"
 
@@ -1676,6 +1677,44 @@ static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
     return SUCCESS;
 }
 
+/* Test json topkeys stats by sending ops on 'somekey' and then getting stats,
+   comparing stats returned match those expected
+   */
+static enum test_result test_topkeys_json(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
+    ENGINE_ERROR_CODE rv = ENGINE_SUCCESS;
+
+    /* Create cJSON object to store returned stats in */
+    cJSON *stats = cJSON_CreateObject();
+
+    const void *adm_cookie = mk_conn("admin", NULL);
+    int cmd;
+    void *pkt = create_create_bucket_pkt("someuser", ENGINE_PATH, "");
+    rv = h1->unknown_command(h, adm_cookie, pkt, add_response);
+    cb_assert(rv == ENGINE_SUCCESS);
+    free(pkt);
+
+    pkt = create_packet(PROTOCOL_BINARY_CMD_GET_REPLICA, "somekey", "someval");
+    rv = h1->unknown_command(h, adm_cookie, pkt, add_response);
+    cb_assert(rv == ENGINE_SUCCESS);
+    free(pkt);
+
+    for (cmd = 0x90; cmd < 0xff; ++cmd) {
+        pkt = create_packet(cmd, "somekey", "someval");
+        h1->unknown_command(h, adm_cookie, pkt, add_response);
+        free(pkt);
+    }
+
+    /* Get stats from (bucket) engine */
+    stats = h1->get_stats_json(h, adm_cookie);
+
+    /* Assert that the JSON object has a count of 10 operations from previous
+       operations */
+    cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
+                                  cJSON_GetObjectItem(stats, "topkeys"),
+                                  0), "access_count")->valueint == 10);
+    return SUCCESS;
+}
+
 static ENGINE_HANDLE_V1 *start_your_engines(const char *cfg) {
     ENGINE_HANDLE_V1 *h = (ENGINE_HANDLE_V1 *)load_engine(BUCKET_ENGINE_PATH, cfg);
     cb_assert(h);
@@ -1923,6 +1962,7 @@ int main(int argc, char **argv) {
         {"concurrent connect/disconnect (tap)",
          test_concurrent_connect_disconnect_tap, NULL },
         {"topkeys", test_topkeys, NULL },
+        {"jsonic topkeys", test_topkeys_json, NULL },
         {NULL, NULL, NULL}
     };
 

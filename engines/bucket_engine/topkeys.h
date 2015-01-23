@@ -5,6 +5,8 @@
 #include <platform/cbassert.h>
 #include <memcached/engine.h>
 #include "genhash.h"
+#include <cJSON.h>
+
 
 #define TK_MAX_VAL_LEN 500
 
@@ -46,5 +48,8 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tk, size_t n,
                                 const void *cookie,
                                 const rel_time_t current_time,
                                 ADD_STAT add_stat);
+cJSON* topkeys_json_stats(topkeys_t **tks, size_t shards,
+                                const void *cookie,
+                                const rel_time_t current_time);
 
 #endif

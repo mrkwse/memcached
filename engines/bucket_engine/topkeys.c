@@ -5,6 +5,7 @@
 #include <string.h>
 #include <platform/platform.h>
 #include "topkeys.h"
+#include <cJSON.h>
 
 static topkey_item_t *topkey_item_init(const void *key, int nkey, rel_time_t ct) {
     topkey_item_t *it = calloc(sizeof(topkey_item_t) + nkey, 1);
@@ -86,8 +87,8 @@ static void dlist_insert_after(dlist_t *list, dlist_t *new) {
 }
 
 static void dlist_iter(dlist_t *list,
-                              void (*iterfunc)(dlist_t *item, void *arg),
-                              void *arg)
+                       void (*iterfunc)(dlist_t *item, void *arg),
+                       void *arg)
 {
     dlist_t *p = list;
     while ((p = p->next) != list) {
@@ -126,22 +127,47 @@ struct tk_context {
     const void *cookie;
     ADD_STAT add_stat;
     rel_time_t current_time;
+    //TODO cJSON Object/Array
 };
 
 static void tk_iterfunc(dlist_t *list, void *arg) {
-    struct tk_context *c = arg;
-    topkey_item_t *it = (topkey_item_t*)list;
+    struct tk_context *c = arg; //context
+    topkey_item_t *it = (topkey_item_t*)list;   //tk->list
     char val_str[TK_MAX_VAL_LEN];
-    int vlen = snprintf(val_str, sizeof(val_str) - 1, "get_hits=%d,"
+    int vlen = snprintf(val_str, sizeof(val_str) - 1, "key=%s,get_hits=%d,"     //TODO ditch key=%s
                         "get_misses=0,cmd_set=0,incr_hits=0,incr_misses=0,"
                         "decr_hits=0,decr_misses=0,delete_hits=0,"
                         "delete_misses=0,evictions=0,cas_hits=0,cas_badval=0,"
                         "cas_misses=0,get_replica=0,evict=0,getl=0,unlock=0,"
                         "get_meta=0,set_meta=0,del_meta=0,ctime=%"PRIu32
-                        ",atime=%"PRIu32, it->access_count,
+                        ",atime=%"PRIu32, (char *)(it + 1), it->access_count,   //TODO ditch (char*)(it + 1),
                         c->current_time - it->ti_ctime,
                         c->current_time - it->ti_atime);
-    c->add_stat((char*)(it + 1), it->ti_nkey, val_str, vlen, c->cookie);
+    c->add_stat((char*)(it + 1), it->ti_nkey, val_str, vlen, c->cookie);    //context.add_stat
+}
+
+/*
+ * Passing in a list of keys, context, and cJSON array will populate that
+ * array with an object for each key in the following format:
+ * {
+ *    "key": "somekey",
+ *    "access_count": nnn,
+ *    "ctime": ccc,
+ *    "atime": aaa
+ * }
+ */
+static void tk_jsonfunc(dlist_t *list, void *arg, cJSON *array) {
+    struct tk_context *c = arg;
+    topkey_item_t *it = (topkey_item_t*)list;
+    cJSON *key = cJSON_CreateObject();
+    cJSON_AddItemToObject(key, "key", cJSON_CreateString((char *)(it + 1)));
+    cJSON_AddItemToObject(key, "access_count",
+                          cJSON_CreateNumber(it->access_count));
+    cJSON_AddItemToObject(key, "ctime",
+                          cJSON_CreateNumber(c->current_time - it->ti_ctime));
+    cJSON_AddItemToObject(key, "atime",
+                          cJSON_CreateNumber(c->current_time - it->ti_atime));
+    cJSON_AddItemToArray(array, key);
 }
 
 ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
@@ -161,6 +187,39 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
         cb_mutex_exit(&tk->mutex);
     }
     return ENGINE_SUCCESS;
+}
+
+/*
+ * Passing a set of topkeys, shards, and relevant context data will
+ * return a cJSON object containing an array of topkeys (with each key
+ * appearing as in the example above for tk_jsonfunc):
+ * {
+ *   "topkeys": [
+ *      {}, {}
+ *    ]
+ * }
+ */
+ cJSON* topkeys_json_stats(topkeys_t **tks, size_t shards,
+                    const void *cookie,
+                    const rel_time_t current_time) {
+    struct tk_context context;
+    size_t i;
+    cJSON *stats = cJSON_CreateObject();
+    cJSON *topkeys = cJSON_CreateArray();
+    context.cookie = cookie;
+    context.current_time = current_time;
+    for (i = 0; i < shards; i++) {
+        topkeys_t *tk = tks[i];
+        cb_assert(tk);
+        cb_mutex_enter(&tk->mutex);
+        dlist_t *p = &tk->list;
+        while((p = p->next) != &tk->list){
+            tk_jsonfunc(p, &context, topkeys);
+        }
+        cb_mutex_exit(&tk->mutex);
+    }
+    cJSON_AddItemToObject(stats, "topkeys", topkeys);
+    return stats;
 }
 
 topkeys_t *tk_get_shard(topkeys_t **tks, const void *key, size_t nkey) {

@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <cJSON.h>
 
 #include "memcached/types.h"
 #include "memcached/protocol_binary.h"
@@ -385,6 +386,9 @@ extern "C" {
                                        const char* stat_key,
                                        int nkey,
                                        ADD_STAT add_stat);
+
+        cJSON* (*get_stats_json)(ENGINE_HANDLE* handle,
+                                const void* cookie);
 
         /**
          * Reset the stats.

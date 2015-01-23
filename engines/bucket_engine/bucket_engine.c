@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <cJSON.h>
 
 #include <memcached/engine.h>
 #include <platform/platform.h>
@@ -116,6 +117,8 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
                                           const char *stat_key,
                                           int nkey,
                                           ADD_STAT add_stat);
+static cJSON* bucket_get_stats_json(ENGINE_HANDLE* handle,
+                                    const void *cookie);
 static void *bucket_get_stats_struct(ENGINE_HANDLE* handle,
                                                     const void *cookie);
 static ENGINE_ERROR_CODE bucket_aggregate_stats(ENGINE_HANDLE* handle,
@@ -583,6 +586,7 @@ ENGINE_ERROR_CODE create_instance(uint64_t interface,
     bucket_engine.engine.arithmetic = bucket_arithmetic;
     bucket_engine.engine.flush = bucket_flush;
     bucket_engine.engine.get_stats = bucket_get_stats;
+    bucket_engine.engine.get_stats_json = bucket_get_stats_json;
     bucket_engine.engine.reset_stats = bucket_reset_stats;
     bucket_engine.engine.get_stats_struct = bucket_get_stats_struct;
     bucket_engine.engine.aggregate_stats = bucket_aggregate_stats;
@@ -1920,6 +1924,27 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
         release_engine_handle(peh);
     }
     return rc;
+}
+
+/**
+ * Alternate implementation of the "get_stats" function in engine specification,
+ * exclusively for topkeys stats. As above with get_stats, however returns a
+ * cJSON object rather than an ENGINE_ERROR_CODE.
+ */
+static cJSON* bucket_get_stats_json(ENGINE_HANDLE* handle,
+                               const void* cookie) {
+    /* cJSON object to be returned */
+    cJSON *stats = cJSON_CreateObject();
+    proxied_engine_handle_t *peh = get_engine_handle(handle, cookie);
+
+    /* Call topkeys_json_stats to populate stats cJSON object */
+    stats = topkeys_json_stats(peh->topkeys, TK_SHARDS, cookie,
+                               get_current_time());
+
+    release_engine_handle(peh);
+
+    /* Return cJSON stats */
+    return stats;
 }
 
 /**
