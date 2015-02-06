@@ -117,8 +117,8 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
                                           const char *stat_key,
                                           int nkey,
                                           ADD_STAT add_stat);
-static cJSON* bucket_get_stats_json(ENGINE_HANDLE* handle,
-                                    const void *cookie);
+void bucket_get_stats_json(ENGINE_HANDLE* handle, const void *cookie,
+                           ADD_STAT add_stat);
 static void *bucket_get_stats_struct(ENGINE_HANDLE* handle,
                                                     const void *cookie);
 static ENGINE_ERROR_CODE bucket_aggregate_stats(ENGINE_HANDLE* handle,
@@ -1931,8 +1931,11 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
  * exclusively for topkeys stats. As above with get_stats, however returns a
  * cJSON object rather than an ENGINE_ERROR_CODE.
  */
-static cJSON* bucket_get_stats_json(ENGINE_HANDLE* handle,
-                               const void* cookie) {
+void bucket_get_stats_json(ENGINE_HANDLE* handle,
+                           const void* cookie,
+                           ADD_STAT add_stats) {
+
+    printf("\nbucket_get_stats_json\n");
     /* cJSON object to be returned */
     cJSON *stats = cJSON_CreateObject();
     proxied_engine_handle_t *peh = get_engine_handle(handle, cookie);
@@ -1941,10 +1944,15 @@ static cJSON* bucket_get_stats_json(ENGINE_HANDLE* handle,
     stats = topkeys_json_stats(peh->topkeys, TK_SHARDS, cookie,
                                get_current_time());
 
-    release_engine_handle(peh);
+    /* Add stats JSON according to add_stats */
+    char key[] = " ";
+    char *stats_str = cJSON_PrintUnformatted(stats);
+    add_stats(key, (uint16_t)strlen(key),
+              stats_str, (uint32_t)strlen(stats_str), cookie);
+    cJSON_Free(stats_str);
+    cJSON_Delete(stats);
 
-    /* Return cJSON stats */
-    return stats;
+    release_engine_handle(peh);
 }
 
 /**

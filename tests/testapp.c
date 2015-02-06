@@ -423,7 +423,7 @@ static cJSON *generate_config(void)
     strncat(pem_path, CERTIFICATE_PATH(testapp.pem), 256);
     strncat(cert_path, CERTIFICATE_PATH(testapp.cert), 256);
 
-    cJSON_AddStringToObject(obj, "module", "default_engine.so");
+    cJSON_AddStringToObject(obj, "module", "default_engine.so");    // TODO: check is definitely to change elsewhere
     cJSON_AddItemReferenceToObject(root, "engine", obj);
 
     obj = cJSON_CreateObject();
@@ -1055,6 +1055,8 @@ static enum test_return test_config_parser(void) {
 }
 
 static char *isasl_file;
+
+//FIXME
 
 static enum test_return start_memcached_server(void) {
     cJSON *rbac = generate_rbac_config();
@@ -2350,6 +2352,76 @@ static enum test_return test_stat_connections(void) {
     } while (buffer.response.message.header.response.keylen != 0);
 
     return TEST_PASS;
+}
+
+static bool create_bucket() {
+
+    // char buf[1024];
+    // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
+    // return create_packet4(PROTOCOL_BINARY_CMD_CREATE_BUCKET, user,
+    //                       buf, strlen(path) + strlen(args) + 1, 0);
+
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[1024];
+    } buffer;
+
+    char *user = "someuser";
+    char *path /* = ENGINE_PATH*/;
+    char *args = "";
+
+    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                             PROTOCOL_BINARY_CMD_CREATE_BUCKET,
+                             user, strlen(user), buf, strlen(path) +
+                             strlen(args) + 1);
+//               raw_command(buf,        bufsz,
+//                           cmd,
+//                           key, keylen, dta, dtalen)
+    safe_send(buffer.bytes, len, false);
+    // printf(buf, sizeof(buf), "%s%c%s", path, 0, args);
+    // PROTOCOL_BINARY_CMD_CREATE_BUCKET}
+
+static bool uncreate_bucket() {
+
+}
+
+static enum test_return test_topkeys(void) {
+    // for (int ii = 0; ii < 10; ii++) {
+    //     test_set_impl("samplekey", PROTOCOL_BINARY_CMD_SET);
+    // }
+    // test_get_impl("samplekey", PROTOCOL_BINARY_CMD_GET); // FIXME SOMEHOW
+    // test_getq_impl("samplekey", PROTOCOL_BINARY_CMD_GETQ);
+
+    if (create_bucket()) {
+
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[2048];
+    } buffer;
+
+    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                             PROTOCOL_BINARY_CMD_STAT,
+                             "topkeys_json", strlen("topkeys_json"), NULL, 0);
+
+    safe_send(buffer.bytes, len, false);
+    // do {
+    //     safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+    //     validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
+    //                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
+    //     // printf("\n%s\n", buffer.response.message.header.response.status);
+    // } while (buffer.response.message.header.response.keylen != 0);
+
+    // cb_assert(strstr(buffer.response.message.header.response.value, "\"access_count\":10"));
+
+    return TEST_PASS;
+
+    } else {
+
+        return TEST_FAIL;
+
+    }
 }
 
 static enum test_return test_scrub(void) {
@@ -4421,6 +4493,7 @@ struct testcase testcases[] = {
     TESTCASE_PLAIN_AND_SSL("prependq", test_prependq),
     TESTCASE_PLAIN_AND_SSL("stat", test_stat),
     TESTCASE_PLAIN_AND_SSL("stat_connections", test_stat_connections),
+    TESTCASE_PLAIN_AND_SSL("topkeys", test_topkeys),
     TESTCASE_PLAIN_AND_SSL("roles", test_roles),
     TESTCASE_PLAIN_AND_SSL("scrub", test_scrub),
     TESTCASE_PLAIN_AND_SSL("verbosity", test_verbosity),

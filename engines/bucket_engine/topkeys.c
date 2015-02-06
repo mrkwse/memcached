@@ -127,20 +127,20 @@ struct tk_context {
     const void *cookie;
     ADD_STAT add_stat;
     rel_time_t current_time;
-    //TODO cJSON Object/Array
+    cJSON *array;   // FIXME This does not appear to break things if empty/passed around
 };
 
 static void tk_iterfunc(dlist_t *list, void *arg) {
-    struct tk_context *c = arg; //context
-    topkey_item_t *it = (topkey_item_t*)list;   //tk->list
+    struct tk_context *c = arg;
+    topkey_item_t *it = (topkey_item_t*)list;
     char val_str[TK_MAX_VAL_LEN];
-    int vlen = snprintf(val_str, sizeof(val_str) - 1, "key=%s,get_hits=%d,"     //TODO ditch key=%s
+    int vlen = snprintf(val_str, sizeof(val_str) - 1, "get_hits=%d,"
                         "get_misses=0,cmd_set=0,incr_hits=0,incr_misses=0,"
                         "decr_hits=0,decr_misses=0,delete_hits=0,"
                         "delete_misses=0,evictions=0,cas_hits=0,cas_badval=0,"
                         "cas_misses=0,get_replica=0,evict=0,getl=0,unlock=0,"
                         "get_meta=0,set_meta=0,del_meta=0,ctime=%"PRIu32
-                        ",atime=%"PRIu32, (char *)(it + 1), it->access_count,   //TODO ditch (char*)(it + 1),
+                        ",atime=%"PRIu32, it->access_count,
                         c->current_time - it->ti_ctime,
                         c->current_time - it->ti_atime);
     c->add_stat((char*)(it + 1), it->ti_nkey, val_str, vlen, c->cookie);    //context.add_stat
@@ -156,7 +156,7 @@ static void tk_iterfunc(dlist_t *list, void *arg) {
  *    "atime": aaa
  * }
  */
-static void tk_jsonfunc(dlist_t *list, void *arg, cJSON *array) {
+static void tk_jsonfunc(dlist_t *list, void *arg) {
     struct tk_context *c = arg;
     topkey_item_t *it = (topkey_item_t*)list;
     cJSON *key = cJSON_CreateObject();
@@ -167,7 +167,7 @@ static void tk_jsonfunc(dlist_t *list, void *arg, cJSON *array) {
                           cJSON_CreateNumber(c->current_time - it->ti_ctime));
     cJSON_AddItemToObject(key, "atime",
                           cJSON_CreateNumber(c->current_time - it->ti_atime));
-    cJSON_AddItemToArray(array, key);
+    cJSON_AddItemToArray(c->array, key);
 }
 
 ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
@@ -195,7 +195,7 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
  * appearing as in the example above for tk_jsonfunc):
  * {
  *   "topkeys": [
- *      {}, {}
+ *      { ... }, ..., { ... }
  *    ]
  * }
  */
@@ -203,18 +203,19 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
                     const void *cookie,
                     const rel_time_t current_time) {
     struct tk_context context;
-    size_t i;
+    size_t ii;
     cJSON *stats = cJSON_CreateObject();
     cJSON *topkeys = cJSON_CreateArray();
     context.cookie = cookie;
     context.current_time = current_time;
-    for (i = 0; i < shards; i++) {
-        topkeys_t *tk = tks[i];
+    context.array = topkeys;
+    for (ii = 0; ii < shards; ii++) {
+        topkeys_t *tk = tks[ii];
         cb_assert(tk);
         cb_mutex_enter(&tk->mutex);
         dlist_t *p = &tk->list;
         while((p = p->next) != &tk->list){
-            tk_jsonfunc(p, &context, topkeys);
+            tk_jsonfunc(p, &context);
         }
         cb_mutex_exit(&tk->mutex);
     }

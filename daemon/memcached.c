@@ -4845,6 +4845,22 @@ static void stat_executor(conn *c, void *packet)
                 }
             }
             connection_stats(&append_stats, c, fd);
+        } else if (strncmp(subcommand, "topkeys_json", 12) == 0) {
+            printf("\nstat_exector\n");
+
+            const engine_info *info = settings.engine.v1->get_info(settings.engine.v0);
+
+            char message[4096];
+            printf("Loaded engine: %s\n",
+                                                info->description ?
+                                                info->description : "Unknown");
+
+            printf("\nstat_exector\n");
+
+
+            settings.engine.v1->get_stats_json(settings.engine.v0, c,
+                                               append_stats);
+            printf("\nunstat\n");
         } else {
             ret = settings.engine.v1->get_stats(settings.engine.v0, c,
                                                 subcommand, (int)nkey,
