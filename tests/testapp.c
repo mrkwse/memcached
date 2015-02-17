@@ -407,7 +407,7 @@ static void get_working_current_directory(char* out_buf, int out_buf_len) {
     }
 }
 
-static cJSON *generate_config(void)
+static cJSON *generate_config(char *engine)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON *array = cJSON_CreateArray();
@@ -423,12 +423,12 @@ static cJSON *generate_config(void)
     strncat(pem_path, CERTIFICATE_PATH(testapp.pem), 256);
     strncat(cert_path, CERTIFICATE_PATH(testapp.cert), 256);
 
-    cJSON_AddStringToObject(obj, "module", "default_engine.so");    // TODO: check is definitely to change elsewhere
+    cJSON_AddStringToObject(obj, "module", engine);    // TODO:: check is definitely to change elsewhere
     cJSON_AddItemReferenceToObject(root, "engine", obj);
 
-    obj = cJSON_CreateObject();
-    cJSON_AddStringToObject(obj, "module", "blackhole_logger.so");
-    cJSON_AddItemToArray(array, obj);
+    // obj = cJSON_CreateObject();
+    // cJSON_AddStringToObject(obj, "module", "blackhole_logger.so");
+    // cJSON_AddItemToArray(array, obj);
     obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "module", "fragment_rw_ops.so");
     cJSON_AddStringToObject(obj, "config", "r=225;w=226");
@@ -466,6 +466,7 @@ static cJSON *generate_config(void)
     cJSON_AddStringToObject(root, "admin", "");
     cJSON_AddTrueToObject(root, "datatype_support");
     cJSON_AddStringToObject(root, "rbac_file", rbac_path);
+    cJSON_AddNumberToObject(root, "verbosity", 2);
 
     return root;
 }
@@ -640,11 +641,13 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
     }
 #endif // !WIN32
 
+    printf("busy-wait\n");
     /* Yeah just let us "busy-wait" for the file to be created ;-) */
     while (access(filename, F_OK) == -1) {
         usleep(10);
     }
 
+    printf("fopen\n");
     fp = fopen(filename, "r");
     if (fp == NULL) {
         fprintf(stderr, "Failed to open the file containing port numbers: %s\n",
@@ -655,6 +658,7 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
     *port_out = (in_port_t)-1;
     *ssl_port_out = (in_port_t)-1;
 
+    printf("while\n");
     while ((fgets(buffer, sizeof(buffer), fp)) != NULL) {
         if (strncmp(buffer, "TCP INET: ", 10) == 0) {
             int32_t val;
@@ -1058,6 +1062,9 @@ static char *isasl_file;
 
 //FIXME
 
+
+//FIXME - Memcached server starts with default engine (via json_config).
+//        Restart/new top-level test?
 static enum test_return start_memcached_server(void) {
     cJSON *rbac = generate_rbac_config();
     char *rbac_text = cJSON_Print(rbac);
@@ -1071,7 +1078,7 @@ static enum test_return start_memcached_server(void) {
     cJSON_Free(rbac_text);
     cJSON_Delete(rbac);
 
-    json_config = generate_config();
+    json_config = generate_config("default_engine.so");
     config_string = cJSON_Print(json_config);
     if (cb_mktemp(config_file) == NULL) {
         return TEST_FAIL;
@@ -1095,6 +1102,9 @@ static enum test_return start_memcached_server(void) {
     snprintf(env, sizeof(env), "ISASL_PWFILE=%s", isasl_file);
     putenv(strdup(env));
 
+    printf(config_file);
+    printf(rbac_file);
+    printf(isasl_file);
     server_start_time = time(0);
     server_pid = start_server(&port, &ssl_port, false, 600);
     return TEST_PASS;
@@ -1115,7 +1125,7 @@ static enum test_return stop_memcached_server(void) {
 #ifdef WIN32
     TerminateProcess(server_pid, 0);
 #else
-    if (kill(server_pid, SIGTERM) == 0) {
+    if (kill(server_pid, SIGKILL) == 0) {
         /* Wait for the process to be gone... */
         while (kill(server_pid, 0) == 0) {
             sleep(1);
@@ -1126,9 +1136,70 @@ static enum test_return stop_memcached_server(void) {
 
     remove(config_file);
     remove(isasl_file);
-    free(isasl_file);
+    // free(isasl_file);
     remove(rbac_file);
 
+    printf(config_file);
+    printf(rbac_file);
+
+
+
+    return TEST_PASS;
+}
+
+static enum test_return start_bucket_server(void) {
+
+    // char config_file[] = "memcached_testapp.json.XXXXXX";
+    // char rbac_file[] = "testapp_rbac.json.XXXXXX";  //TODO check scope
+
+    printf("buvkets!\n");
+    cJSON *rbac = generate_rbac_config();
+    printf("rbacconf\n");
+    char *rbac_text = cJSON_Print(rbac);
+    printf(" >> %s <<\n", rbac_file);
+    if (cb_mktemp(rbac_file) == NULL) {
+        return TEST_FAIL;
+    }
+    printf("cb_mktemp pass\n");
+    if (write_config_to_file(rbac_text, rbac_file) == -1) {
+        return TEST_FAIL;
+    }
+    printf("if\n");
+    cJSON_Free(rbac_text);
+    cJSON_Delete(rbac);
+
+    json_config = generate_config("bucket_engine.so");
+    printf("new config!\n");
+    config_string = cJSON_Print(json_config);
+    if (cb_mktemp(config_file) == NULL) {
+        return TEST_FAIL;
+    }
+    if (write_config_to_file(config_string, config_file) == -1) {
+        return TEST_FAIL;
+    }
+    printf("config file\n");
+
+    char fname[1024];
+    snprintf(fname, sizeof(fname), "isasl.%lu.%lu.pw",
+             (unsigned long)getpid(),
+             (unsigned long)time(NULL));
+    isasl_file = strdup(fname);
+    cb_assert(isasl_file != NULL);
+
+    FILE *fp = fopen(isasl_file, "w");
+    cb_assert(fp != NULL);
+    fprintf(fp, "_admin password \n");
+    fclose(fp);
+    char env[1024];
+    snprintf(env, sizeof(env), "ISASL_PWFILE=%s", isasl_file);
+    putenv(strdup(env));
+
+    printf(config_file);
+    printf(rbac_file);
+    printf(isasl_file);
+    printf("\nStarting server\n");
+    server_start_time = time(0);
+    server_pid = start_server(&port, &ssl_port, false, 600);
     return TEST_PASS;
 }
 
@@ -2354,75 +2425,77 @@ static enum test_return test_stat_connections(void) {
     return TEST_PASS;
 }
 
-static bool create_bucket() {
-
-    // char buf[1024];
-    // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
-    // return create_packet4(PROTOCOL_BINARY_CMD_CREATE_BUCKET, user,
-    //                       buf, strlen(path) + strlen(args) + 1, 0);
-
-    union {
-        protocol_binary_request_no_extras request;
-        protocol_binary_response_no_extras response;
-        char bytes[1024];
-    } buffer;
-
-    char *user = "someuser";
-    char *path /* = ENGINE_PATH*/;
-    char *args = "";
-
-    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-                             PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-                             user, strlen(user), buf, strlen(path) +
-                             strlen(args) + 1);
-//               raw_command(buf,        bufsz,
-//                           cmd,
-//                           key, keylen, dta, dtalen)
-    safe_send(buffer.bytes, len, false);
-    // printf(buf, sizeof(buf), "%s%c%s", path, 0, args);
-    // PROTOCOL_BINARY_CMD_CREATE_BUCKET}
-
-static bool uncreate_bucket() {
-
-}
-
-static enum test_return test_topkeys(void) {
-    // for (int ii = 0; ii < 10; ii++) {
-    //     test_set_impl("samplekey", PROTOCOL_BINARY_CMD_SET);
-    // }
-    // test_get_impl("samplekey", PROTOCOL_BINARY_CMD_GET); // FIXME SOMEHOW
-    // test_getq_impl("samplekey", PROTOCOL_BINARY_CMD_GETQ);
-
-    if (create_bucket()) {
-
-    union {
-        protocol_binary_request_no_extras request;
-        protocol_binary_response_no_extras response;
-        char bytes[2048];
-    } buffer;
-
-    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-                             PROTOCOL_BINARY_CMD_STAT,
-                             "topkeys_json", strlen("topkeys_json"), NULL, 0);
-
-    safe_send(buffer.bytes, len, false);
-    // do {
-    //     safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-    //     validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
-    //                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    //     // printf("\n%s\n", buffer.response.message.header.response.status);
-    // } while (buffer.response.message.header.response.keylen != 0);
-
-    // cb_assert(strstr(buffer.response.message.header.response.value, "\"access_count\":10"));
-
-    return TEST_PASS;
-
-    } else {
-
-        return TEST_FAIL;
-
-    }
-}
+// static bool create_bucket() {
+//
+//     // char buf[1024];
+//     // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
+//     // return create_packet4(PROTOCOL_BINARY_CMD_CREATE_BUCKET, user,
+//     //                       buf, strlen(path) + strlen(args) + 1, 0);
+//
+//     union {
+//         protocol_binary_request_no_extras request;
+//         protocol_binary_response_no_extras response;
+//         char bytes[1024];
+//     } buffer;
+//
+//     char *user = "someuser";
+//     char *path /* = ENGINE_PATH*/;
+//     char *args = "";
+//
+//     size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+//                              PROTOCOL_BINARY_CMD_CREATE_BUCKET,
+//                              user, strlen(user), buf, strlen(path) +
+//                              strlen(args) + 1);
+// //               raw_command(buf,        bufsz,
+// //                           cmd,
+// //                           key, keylen, dta, dtalen)
+//     safe_send(buffer.bytes, len, false);
+//     // printf(buf, sizeof(buf), "%s%c%s", path, 0, args);
+//     // PROTOCOL_BINARY_CMD_CREATE_BUCKET
+//
+// }
+//
+// static bool uncreate_bucket() {
+//
+// }
+//
+// static enum test_return test_topkeys(void) {
+//     // for (int ii = 0; ii < 10; ii++) {
+//     //     test_set_impl("samplekey", PROTOCOL_BINARY_CMD_SET);
+//     // }
+//     // test_get_impl("samplekey", PROTOCOL_BINARY_CMD_GET); // FIXME SOMEHOW
+//     // test_getq_impl("samplekey", PROTOCOL_BINARY_CMD_GETQ);
+//
+//     if (create_bucket()) {
+//
+//     union {
+//         protocol_binary_request_no_extras request;
+//         protocol_binary_response_no_extras response;
+//         char bytes[2048];
+//     } buffer;
+//
+//     size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+//                              PROTOCOL_BINARY_CMD_STAT,
+//                              "topkeys_json", strlen("topkeys_json"), NULL, 0);
+//
+//     safe_send(buffer.bytes, len, false);
+//     // do {
+//     //     safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+//     //     validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
+//     //                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
+//     //     // printf("\n%s\n", buffer.response.message.header.response.status);
+//     // } while (buffer.response.message.header.response.keylen != 0);
+//
+//     // cb_assert(strstr(buffer.response.message.header.response.value, "\"access_count\":10"));
+//
+//     return TEST_PASS;
+//
+//     } else {
+//
+//         return TEST_FAIL;
+//
+//     }
+// }
 
 static enum test_return test_scrub(void) {
     union {
@@ -2846,7 +2919,7 @@ static enum test_return test_config_validate(void) {
 
     /* 'interfaces' - should be able to change max connections */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config("default_engine.so");
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2890,7 +2963,7 @@ static enum test_return test_config_reload(void) {
 
     /* Change max_conns on first interface. */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config("default_engine.so");
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2916,7 +2989,7 @@ static enum test_return test_config_reload(void) {
 
     /* Change backlog on first interface. */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config("default_engine.so");
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2942,7 +3015,7 @@ static enum test_return test_config_reload(void) {
 
     /* Change tcp_nodelay on first interface. */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config("default_engine.so");
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2976,7 +3049,7 @@ static enum test_return test_config_reload_ssl(void) {
     } buffer;
 
     /* Change ssl cert/key on second interface. */
-    cJSON *dynamic = generate_config();
+    cJSON *dynamic = generate_config("default_engine.so");
     char* dyn_string = NULL;
     cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
     cJSON *iface = cJSON_GetArrayItem(iface_list, 1);
@@ -3929,6 +4002,7 @@ static enum test_return test_set_huge_impl(const char *key,
         } else {
             safe_send(set_message, len, false);
 
+
             if (cmd == PROTOCOL_BINARY_CMD_SET) {
                 safe_recv_packet(&receive, sizeof(receive));
                 validate_response_header((protocol_binary_response_no_extras*)receive, cmd, result);
@@ -4450,90 +4524,94 @@ struct testcase testcases[] = {
     TESTCASE_PLAIN("vperror", test_vperror),
     TESTCASE_PLAIN("config_parser", test_config_parser),
     /* The following tests all run towards the same server */
-    TESTCASE_SETUP("start_server", start_memcached_server),
-    TESTCASE_PLAIN_AND_SSL("connect", test_connect_to_server),
-    TESTCASE_PLAIN_AND_SSL("noop", test_noop),
-    TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
-    TESTCASE_PLAIN_AND_SSL("sasl fail", test_sasl_fail),
-    TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
-    TESTCASE_PLAIN_AND_SSL("quit", test_quit),
-    TESTCASE_PLAIN_AND_SSL("quitq", test_quitq),
-    TESTCASE_PLAIN_AND_SSL("set", test_set),
-    TESTCASE_PLAIN_AND_SSL("setq", test_setq),
-    TESTCASE_PLAIN_AND_SSL("add", test_add),
-    TESTCASE_PLAIN_AND_SSL("addq", test_addq),
-    TESTCASE_PLAIN_AND_SSL("replace", test_replace),
-    TESTCASE_PLAIN_AND_SSL("replaceq", test_replaceq),
-    TESTCASE_PLAIN_AND_SSL("delete", test_delete),
-    TESTCASE_PLAIN_AND_SSL("delete_cas", test_delete_cas),
-    TESTCASE_PLAIN_AND_SSL("delete_bad_cas", test_delete_bad_cas),
-    TESTCASE_PLAIN_AND_SSL("deleteq", test_deleteq),
-    TESTCASE_PLAIN_AND_SSL("delete_mutation_seqno", test_delete_mutation_seqno),
-    TESTCASE_PLAIN_AND_SSL("get", test_get),
-    TESTCASE_PLAIN_AND_SSL("getq", test_getq),
-    TESTCASE_PLAIN_AND_SSL("getk", test_getk),
-    TESTCASE_PLAIN_AND_SSL("getkq", test_getkq),
-    TESTCASE_PLAIN_AND_SSL("incr", test_incr),
-    TESTCASE_PLAIN_AND_SSL("incrq", test_incrq),
-    TESTCASE_PLAIN_AND_SSL("decr", test_decr),
-    TESTCASE_PLAIN_AND_SSL("decrq", test_decrq),
-    TESTCASE_PLAIN_AND_SSL("incr_invalid_cas", test_invalid_cas_incr),
-    TESTCASE_PLAIN_AND_SSL("incrq_invalid_cas", test_invalid_cas_incrq),
-    TESTCASE_PLAIN_AND_SSL("decr_invalid_cas", test_invalid_cas_decr),
-    TESTCASE_PLAIN_AND_SSL("decrq_invalid_cas", test_invalid_cas_decrq),
-    TESTCASE_PLAIN_AND_SSL("incr_mutation_seqno", test_incr_mutation_seqno),
-    TESTCASE_PLAIN_AND_SSL("decr_mutation_seqno", test_decr_mutation_seqno),
-    TESTCASE_PLAIN_AND_SSL("version", test_version),
-    TESTCASE_PLAIN_AND_SSL("flush", test_flush),
-    TESTCASE_PLAIN_AND_SSL("flushq", test_flushq),
-    TESTCASE_PLAIN_AND_SSL("cas", test_cas),
-    TESTCASE_PLAIN_AND_SSL("append", test_append),
-    TESTCASE_PLAIN_AND_SSL("appendq", test_appendq),
-    TESTCASE_PLAIN_AND_SSL("prepend", test_prepend),
-    TESTCASE_PLAIN_AND_SSL("prependq", test_prependq),
-    TESTCASE_PLAIN_AND_SSL("stat", test_stat),
-    TESTCASE_PLAIN_AND_SSL("stat_connections", test_stat_connections),
-    TESTCASE_PLAIN_AND_SSL("topkeys", test_topkeys),
-    TESTCASE_PLAIN_AND_SSL("roles", test_roles),
-    TESTCASE_PLAIN_AND_SSL("scrub", test_scrub),
-    TESTCASE_PLAIN_AND_SSL("verbosity", test_verbosity),
-    TESTCASE_PLAIN_AND_SSL("read", test_read),
-    TESTCASE_PLAIN_AND_SSL("write", test_write),
-    TESTCASE_PLAIN_AND_SSL("MB-10114", test_mb_10114),
-    TESTCASE_SSL("MB-12762-ssl_handshake_hang", test_mb_12762_ssl_handshake_hang),
-    TESTCASE_PLAIN_AND_SSL("dcp_noop", test_dcp_noop),
-    TESTCASE_PLAIN_AND_SSL("dcp_buffer_acknowledgment", test_dcp_buffer_ack),
-    TESTCASE_PLAIN_AND_SSL("dcp_control", test_dcp_control),
-    TESTCASE_PLAIN_AND_SSL("hello", test_hello),
-    TESTCASE_PLAIN_AND_SSL("isasl_refresh", test_isasl_refresh),
-    TESTCASE_PLAIN_AND_SSL("ioctl_get", test_ioctl_get),
-    TESTCASE_PLAIN_AND_SSL("ioctl_set", test_ioctl_set),
-#if defined(HAVE_TCMALLOC)
-    TESTCASE_PLAIN_AND_SSL("ioctl_tcmalloc_aggr_decommit",
-                           test_ioctl_tcmalloc_aggr_decommit),
-#endif
-    TESTCASE_PLAIN_AND_SSL("config_validate", test_config_validate),
-    TESTCASE_PLAIN("config_reload", test_config_reload),
-    TESTCASE_SSL("config_reload_ssl", test_config_reload_ssl),
-    TESTCASE_PLAIN_AND_SSL("audit_put", test_audit_put),
-    TESTCASE_PLAIN("audit_config_reload", test_audit_config_reload),
-    TESTCASE_PLAIN_AND_SSL("datatype_json", test_datatype_json),
-    TESTCASE_PLAIN_AND_SSL("datatype_json_without_support", test_datatype_json_without_support),
-    TESTCASE_PLAIN_AND_SSL("datatype_compressed", test_datatype_compressed),
-    TESTCASE_PLAIN_AND_SSL("datatype_compressed_json", test_datatype_compressed_json),
-    TESTCASE_PLAIN_AND_SSL("invalid_datatype", test_invalid_datatype),
-    TESTCASE_PLAIN_AND_SSL("session_ctrl_token", test_session_ctrl_token),
-    TESTCASE_PLAIN_AND_SSL("expiry_relative_with_clock_change", test_expiry_relative_with_clock_change_backwards),
-    TESTCASE_PLAIN("pipeline_hickup", test_pipeline_hickup),
-    TESTCASE_PLAIN_AND_SSL("set_huge", test_set_huge),
-    TESTCASE_PLAIN_AND_SSL("setq_huge", test_setq_huge),
-    TESTCASE_PLAIN_AND_SSL("set_e2big", test_set_e2big),
-    TESTCASE_PLAIN_AND_SSL("pipeline_huge",  test_pipeline_huge),
-    TESTCASE_SSL("pipeline_mb-11203",test_pipeline_set),
-    TESTCASE_PLAIN_AND_SSL("pipeline_1", test_pipeline_set_get_del),
-    TESTCASE_PLAIN_AND_SSL("pipeline_2", test_pipeline_set_del),
-    TESTCASE_PLAIN("exceed_max_packet_size", test_exceed_max_packet_size),
-    TESTCASE_CLEANUP("stop_server", stop_memcached_server),
+    // TESTCASE_SETUP("start_server", start_memcached_server),
+//     TESTCASE_PLAIN_AND_SSL("connect", test_connect_to_server),
+//     TESTCASE_PLAIN_AND_SSL("noop", test_noop),
+//     TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
+//     TESTCASE_PLAIN_AND_SSL("sasl fail", test_sasl_fail),
+//     TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
+//     TESTCASE_PLAIN_AND_SSL("quit", test_quit),
+//     TESTCASE_PLAIN_AND_SSL("quitq", test_quitq),
+//     TESTCASE_PLAIN_AND_SSL("set", test_set),
+//     TESTCASE_PLAIN_AND_SSL("setq", test_setq),
+//     TESTCASE_PLAIN_AND_SSL("add", test_add),
+//     TESTCASE_PLAIN_AND_SSL("addq", test_addq),
+//     TESTCASE_PLAIN_AND_SSL("replace", test_replace),
+//     TESTCASE_PLAIN_AND_SSL("replaceq", test_replaceq),
+//     TESTCASE_PLAIN_AND_SSL("delete", test_delete),
+//     TESTCASE_PLAIN_AND_SSL("delete_cas", test_delete_cas),
+//     TESTCASE_PLAIN_AND_SSL("delete_bad_cas", test_delete_bad_cas),
+//     TESTCASE_PLAIN_AND_SSL("deleteq", test_deleteq),
+//     TESTCASE_PLAIN_AND_SSL("delete_mutation_seqno", test_delete_mutation_seqno),
+//     TESTCASE_PLAIN_AND_SSL("get", test_get),
+//     TESTCASE_PLAIN_AND_SSL("getq", test_getq),
+//     TESTCASE_PLAIN_AND_SSL("getk", test_getk),
+//     TESTCASE_PLAIN_AND_SSL("getkq", test_getkq),
+//     TESTCASE_PLAIN_AND_SSL("incr", test_incr),
+//     TESTCASE_PLAIN_AND_SSL("incrq", test_incrq),
+//     TESTCASE_PLAIN_AND_SSL("decr", test_decr),
+//     TESTCASE_PLAIN_AND_SSL("decrq", test_decrq),
+//     TESTCASE_PLAIN_AND_SSL("incr_invalid_cas", test_invalid_cas_incr),
+//     TESTCASE_PLAIN_AND_SSL("incrq_invalid_cas", test_invalid_cas_incrq),
+//     TESTCASE_PLAIN_AND_SSL("decr_invalid_cas", test_invalid_cas_decr),
+//     TESTCASE_PLAIN_AND_SSL("decrq_invalid_cas", test_invalid_cas_decrq),
+//     TESTCASE_PLAIN_AND_SSL("incr_mutation_seqno", test_incr_mutation_seqno),
+//     TESTCASE_PLAIN_AND_SSL("decr_mutation_seqno", test_decr_mutation_seqno),
+//     TESTCASE_PLAIN_AND_SSL("version", test_version),
+//     TESTCASE_PLAIN_AND_SSL("flush", test_flush),
+//     TESTCASE_PLAIN_AND_SSL("flushq", test_flushq),
+//     TESTCASE_PLAIN_AND_SSL("cas", test_cas),
+//     TESTCASE_PLAIN_AND_SSL("append", test_append),
+//     TESTCASE_PLAIN_AND_SSL("appendq", test_appendq),
+//     TESTCASE_PLAIN_AND_SSL("prepend", test_prepend),
+//     TESTCASE_PLAIN_AND_SSL("prependq", test_prependq),
+//     TESTCASE_PLAIN_AND_SSL("stat", test_stat),
+//     TESTCASE_PLAIN_AND_SSL("stat_connections", test_stat_connections),
+//     TESTCASE_PLAIN_AND_SSL("roles", test_roles),
+//     TESTCASE_PLAIN_AND_SSL("scrub", test_scrub),
+//     TESTCASE_PLAIN_AND_SSL("verbosity", test_verbosity),
+//     TESTCASE_PLAIN_AND_SSL("read", test_read),
+//     TESTCASE_PLAIN_AND_SSL("write", test_write),
+//     TESTCASE_PLAIN_AND_SSL("MB-10114", test_mb_10114),
+//     TESTCASE_SSL("MB-12762-ssl_handshake_hang", test_mb_12762_ssl_handshake_hang),
+//     TESTCASE_PLAIN_AND_SSL("dcp_noop", test_dcp_noop),
+//     TESTCASE_PLAIN_AND_SSL("dcp_buffer_acknowledgment", test_dcp_buffer_ack),
+//     TESTCASE_PLAIN_AND_SSL("dcp_control", test_dcp_control),
+//     TESTCASE_PLAIN_AND_SSL("hello", test_hello),
+//     TESTCASE_PLAIN_AND_SSL("isasl_refresh", test_isasl_refresh),
+//     TESTCASE_PLAIN_AND_SSL("ioctl_get", test_ioctl_get),
+//     TESTCASE_PLAIN_AND_SSL("ioctl_set", test_ioctl_set),
+// #if defined(HAVE_TCMALLOC)
+//     TESTCASE_PLAIN_AND_SSL("ioctl_tcmalloc_aggr_decommit",
+//                            test_ioctl_tcmalloc_aggr_decommit),
+// #endif
+//     TESTCASE_PLAIN_AND_SSL("config_validate", test_config_validate),
+//     TESTCASE_PLAIN("config_reload", test_config_reload),
+//     TESTCASE_SSL("config_reload_ssl", test_config_reload_ssl),
+//     TESTCASE_PLAIN_AND_SSL("audit_put", test_audit_put),
+//     TESTCASE_PLAIN("audit_config_reload", test_audit_config_reload),
+//     TESTCASE_PLAIN_AND_SSL("datatype_json", test_datatype_json),
+//     TESTCASE_PLAIN_AND_SSL("datatype_json_without_support", test_datatype_json_without_support),
+//     TESTCASE_PLAIN_AND_SSL("datatype_compressed", test_datatype_compressed),
+//     TESTCASE_PLAIN_AND_SSL("datatype_compressed_json", test_datatype_compressed_json),
+//     TESTCASE_PLAIN_AND_SSL("invalid_datatype", test_invalid_datatype),
+//     TESTCASE_PLAIN_AND_SSL("session_ctrl_token", test_session_ctrl_token),
+//     TESTCASE_PLAIN_AND_SSL("expiry_relative_with_clock_change", test_expiry_relative_with_clock_change_backwards),
+//     TESTCASE_PLAIN("pipeline_hickup", test_pipeline_hickup),
+//     TESTCASE_PLAIN_AND_SSL("set_huge", test_set_huge),
+//     TESTCASE_PLAIN_AND_SSL("setq_huge", test_setq_huge),
+//     TESTCASE_PLAIN_AND_SSL("set_e2big", test_set_e2big),
+//     TESTCASE_PLAIN_AND_SSL("pipeline_huge",  test_pipeline_huge),
+//     TESTCASE_SSL("pipeline_mb-11203",test_pipeline_set),
+//     TESTCASE_PLAIN_AND_SSL("pipeline_1", test_pipeline_set_get_del),
+//     TESTCASE_PLAIN_AND_SSL("pipeline_2", test_pipeline_set_del),
+//     TESTCASE_PLAIN("exceed_max_packet_size", test_exceed_max_packet_size),
+    // TESTCASE_CLEANUP("stop_server", stop_memcached_server),
+    /* The following tests all run on an instance of memcached using
+       bucket_engine in place of deafault_engine.                    */
+    TESTCASE_SETUP("start_bucket_server", start_bucket_server),
+    // TESTCASE_PLAIN_AND_SSL("topkeys", test_topkeys),
+    TESTCASE_CLEANUP("stop_bucket_server", stop_memcached_server),
     TESTCASE_PLAIN(NULL, NULL)
 };
 
