@@ -1677,6 +1677,24 @@ static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
     return SUCCESS;
 }
 
+static void append_stats(const char *key, const uint16_t klen,
+                         const char *val, const uint32_t vlen,
+                         const void *cookie) {
+    size_t needed;
+    conn *c = (conn*)cookie;
+    /* value without a key is invalid */
+    if (klen == 0 && vlen > 0) {
+        return;
+    }
+
+    needed = vlen + klen + sizeof(protocol_binary_response_header);
+    if(!grow_dynamic_buffer(c, needed)) {
+        return;
+    }
+    append_bin_stats(key, klen, val, vlen, c);
+    cb_assert(c->dynamic_buffer.offset <= c->dynamic_buffer.size);
+}
+
 /* Test json topkeys stats by sending ops on 'somekey' and then getting stats,
    comparing stats returned match those expected
    */
@@ -1705,7 +1723,7 @@ static enum test_result test_topkeys_json(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1
     }
 
     /* Get stats from (bucket) engine */
-    // stats = h1->get_stat  s_json(h, adm_cookie);
+    stats = h1->get_stats_json(h, adm_cookie, append_stats);
 
     /* Assert that the JSON object has a count of 10 operations from previous
        operations */
