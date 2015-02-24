@@ -1937,15 +1937,17 @@ void bucket_get_stats_json(ENGINE_HANDLE* handle,
 
     printf("\nbucket_get_stats_json\n");
     /* cJSON object to be returned */
-    cJSON *stats = cJSON_CreateObject();
     proxied_engine_handle_t *peh = get_engine_handle(handle, cookie);
 
+    printf("about to call topkeys_json_stats\n");
     /* Call topkeys_json_stats to populate stats cJSON object */
-    stats = topkeys_json_stats(peh->topkeys, TK_SHARDS, cookie,
+    cJSON *stats = topkeys_json_stats(peh->topkeys, TK_SHARDS, cookie,
                                get_current_time());
 
+    printf("stats cJSON populated\n");
+
     /* Add stats JSON according to add_stats */
-    char key[] = " ";
+    char key[] = "topkeys";
     char *stats_str = cJSON_PrintUnformatted(stats);
     add_stats(key, (uint16_t)strlen(key),
               stats_str, (uint32_t)strlen(stats_str), cookie);

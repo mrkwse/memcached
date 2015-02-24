@@ -2500,48 +2500,48 @@ static bool uncreate_bucket() {
 static enum test_return test_topkeys(void) {
 
 
-    // int sum = 42;
-    if (create_bucket()) {
-        return TEST_PASS;
-    } else {
-        return TEST_FAIL;
-    }
-
-    propagate_bucket(12);
+    int sum = 42;
+    // if (create_bucket()) {
+    //     return TEST_PASS;
+    // } else {
+    //     return TEST_FAIL;
+    // }
+    //
+    propagate_bucket(52);
 
 
     // test_get_impl("samplekey", PROTOCOL_BINARY_CMD_GET); // FIXME SOMEHOW
     // test_getq_impl("samplekey", PROTOCOL_BINARY_CMD_GETQ);
 
-    // if (create_bucket()) {
-    //
-    //     propagate_bucket(sum);
-    //
-    //     union {
-    //         protocol_binary_request_no_extras request;
-    //         protocol_binary_response_no_extras response;
-    //         char bytes[2048];
-    //     } buffer;
-    //
-    //     size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-    //                              PROTOCOL_BINARY_CMD_STAT,
-    //                              "topkeys_json", strlen("topkeys_json"), NULL, 0);
-    //
-    //     safe_send(buffer.bytes, len, false);
-    //     do {
-    //         safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-    //         validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
-    //                                  PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    //         // printf("\n%s\n", buffer.response.message.header.response.status);
-    //     } while (buffer.response.message.header.response.keylen != 0);
-    //
-    //     cb_assert(strstr(buffer.response.message.header.response.value, "\"access_count\":42"));
-    //
-    // } else {
-    //
-    //     return TEST_FAIL;
-    //
-    // }
+    if (create_bucket()) {
+
+        propagate_bucket(sum);
+
+        union {
+            protocol_binary_request_no_extras request;
+            protocol_binary_response_no_extras response;
+            char bytes[2048];
+        } buffer;
+
+        size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                                 PROTOCOL_BINARY_CMD_STAT,
+                                 "topkeys_json", strlen("topkeys_json"), NULL, 0);
+
+        safe_send(buffer.bytes, len, false);
+        do {
+            safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+            validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
+                                     PROTOCOL_BINARY_RESPONSE_SUCCESS);
+            // printf("\n%s\n", buffer.response.message.header.response.status);
+        } while (buffer.response.message.header.response.keylen != 0);
+
+        // cb_assert(strstr(buffer.response.message.body, "\"access_count\":42"));
+
+    } else {
+
+        return TEST_FAIL;
+
+    }
 }
 
 static enum test_return test_scrub(void) {

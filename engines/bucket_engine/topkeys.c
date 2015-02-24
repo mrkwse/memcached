@@ -202,6 +202,7 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
  cJSON* topkeys_json_stats(topkeys_t **tks, size_t shards,
                     const void *cookie,
                     const rel_time_t current_time) {
+    printf("topkeys_json_stats\n");
     struct tk_context context;
     size_t ii;
     cJSON *stats = cJSON_CreateObject();
@@ -220,6 +221,7 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
         cb_mutex_exit(&tk->mutex);
     }
     cJSON_AddItemToObject(stats, "topkeys", topkeys);
+    printf("%s\n", cJSON_Print(stats));
     return stats;
 }
 
