@@ -60,6 +60,10 @@ static int current_phase = 0;
 /* by default all phases enabled (but cmd line args may disable some). */
 static int phases_enabled = phase_setup | phase_plain | phase_ssl | phase_cleanup;
 
+/* engine types */
+#define DEFAULT_ENGINE = "default_engine.so"
+#define BUCKET_ENGINE = "bucket_engine.so"
+
 static pid_t server_pid;
 static in_port_t port = -1;
 static in_port_t ssl_port = -1;
@@ -1078,7 +1082,7 @@ static enum test_return start_memcached_server(void) {
     cJSON_Free(rbac_text);
     cJSON_Delete(rbac);
 
-    json_config = generate_config("default_engine.so");
+    json_config = generate_config(DEFAULT_ENGINE);
     config_string = cJSON_Print(json_config);
     if (cb_mktemp(config_file) == NULL) {
         return TEST_FAIL;
@@ -1171,7 +1175,7 @@ static enum test_return start_bucket_server(void) {
     cJSON_Free(rbac_text);
     cJSON_Delete(rbac);
 
-    json_config = generate_config("bucket_engine.so");
+    json_config = generate_config(BUCKET_ENGINE);
     printf("new config!\n");
     config_string = cJSON_Print(json_config);
     if (cb_mktemp(config_file) == NULL) {
@@ -2966,7 +2970,7 @@ static enum test_return test_config_validate(void) {
 
     /* 'interfaces' - should be able to change max connections */
     {
-        cJSON *dynamic = generate_config("default_engine.so");
+        cJSON *dynamic = generate_config(DEFAULT_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -3010,7 +3014,7 @@ static enum test_return test_config_reload(void) {
 
     /* Change max_conns on first interface. */
     {
-        cJSON *dynamic = generate_config("default_engine.so");
+        cJSON *dynamic = generate_config(DEFAULT_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -3036,7 +3040,7 @@ static enum test_return test_config_reload(void) {
 
     /* Change backlog on first interface. */
     {
-        cJSON *dynamic = generate_config("default_engine.so");
+        cJSON *dynamic = generate_config(DEFAULT_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -3062,7 +3066,7 @@ static enum test_return test_config_reload(void) {
 
     /* Change tcp_nodelay on first interface. */
     {
-        cJSON *dynamic = generate_config("default_engine.so");
+        cJSON *dynamic = generate_config(DEFAULT_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -3096,7 +3100,7 @@ static enum test_return test_config_reload_ssl(void) {
     } buffer;
 
     /* Change ssl cert/key on second interface. */
-    cJSON *dynamic = generate_config("default_engine.so");
+    cJSON *dynamic = generate_config(DEFAULT_ENGINE);
     char* dyn_string = NULL;
     cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
     cJSON *iface = cJSON_GetArrayItem(iface_list, 1);

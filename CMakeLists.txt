@@ -233,7 +233,6 @@ ENDIF (ENABLE_DTRACE)
 
 
 ADD_EXECUTABLE(memcached_testapp tests/testapp.c daemon/cache.c programs/utilities.c)
-ADD_EXECUTABLE(topkeys_testapp tests/topkeys_testapp.c daemon/cache.c programs/utilities.c)
 
 SET(CBSASL_SOURCES
   ${Memcached_SOURCE_DIR}/include/cbsasl/cbsasl.h
@@ -277,7 +276,6 @@ TARGET_LINK_LIBRARIES(testapp_extension mcd_util platform ${COUCHBASE_NETWORK_LI
 TARGET_LINK_LIBRARIES(mcd_util platform)
 TARGET_LINK_LIBRARIES(memcached auditd mcd_util cbsasl platform cJSON JSON_checker ${SNAPPY_LIBRARIES} ${MALLOC_LIBRARIES} ${LIBEVENT_LIBRARIES} ${OPENSSL_LIBRARIES} ${COUCHBASE_NETWORK_LIBS} ${BREAKPAD_LIBRARIES})
 TARGET_LINK_LIBRARIES(memcached_testapp mcd_util cbsasl cJSON platform ${SNAPPY_LIBRARIES} ${LIBEVENT_LIBRARIES} ${COUCHBASE_NETWORK_LIBS} ${OPENSSL_LIBRARIES})
-TARGET_LINK_LIBRARIES(topkeys_testapp  mcd_util cbsasl cJSON platform ${SNAPPY_LIBRARIES} ${LIBEVENT_LIBRARIES} ${COUCHBASE_NETWORK_LIBS} ${OPENSSL_LIBRARIES})
 
 TARGET_LINK_LIBRARIES(file_logger platform)
 
@@ -328,7 +326,6 @@ INSTALL(TARGETS cbsasl
 
 ADD_TEST(memcached-basic-unit-tests-plain memcached_testapp plain)
 ADD_TEST(memcached-basic-unit-tests-SSL memcached_testapp ssl)
-# ADD_TEST(memcached-topkeys-test topkeys_testapp)
 ADD_TEST(memcached-bucket_engine-unit-tests bucket_engine_testapp)
 ADD_TEST(memcached-basic-engine-tests engine_testapp -E default_engine.so -T basic_engine_testsuite.so)
 

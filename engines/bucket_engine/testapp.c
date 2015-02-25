@@ -79,6 +79,11 @@ enum test_result {
     PENDING = 19
 };
 
+typedef enum {
+    topkeys_standard,
+    topkeys_json,
+} topkeys_test_type;
+
 struct test {
     const char *name;
     enum test_result (*tfun)(ENGINE_HANDLE *, ENGINE_HANDLE_V1 *);
@@ -1646,7 +1651,10 @@ static enum test_result test_concurrent_connect_disconnect_tap(ENGINE_HANDLE *h,
     return SUCCESS;
 }
 
-static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
+
+
+static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1,
+                                     topkeys_test_type format) {
     ENGINE_ERROR_CODE rv = ENGINE_SUCCESS;
     const void *adm_cookie = mk_conn("admin", NULL);
     int cmd;
@@ -1668,71 +1676,83 @@ static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
         free(pkt);
     }
 
-    rv = h1->get_stats(h, adm_cookie, "topkeys", 7, add_stats);
-    cb_assert(rv == ENGINE_SUCCESS);
-    cb_assert(genhash_size(stats_hash) == 1);
-    val = genhash_find(stats_hash, "somekey", strlen("somekey"));
-    cb_assert(val != NULL);
-    cb_assert(strstr(val, "get_hits=10") != NULL);
+    if (format == topkeys_standard) {
+        rv = h1->get_stats(h, adm_cookie, "topkeys", 7, add_stats);
+        cb_assert(rv == ENGINE_SUCCESS);
+        cb_assert(genhash_size(stats_hash) == 1);
+        val = genhash_find(stats_hash, "somekey", strlen("somekey"));
+        cb_assert(val != NULL);
+        cb_assert(strstr(val, "get_hits=10") != NULL);
+    } else if (format == topkeys_json){
+        /* Assert that the JSON object has a count of 10 operations from previous
+           operations if JSON test called */
+        cJSON *stats = cJSON_CreateObject();
+        rv = h1->get_stats(h, adm_cookie, "topkeys_json", strlen("topkeys_json"), add_stats);
+        val = genhash_find(stats_hash, "topkeys_json", strlen("topkeys_json"));
+        cb_assert(val != NULL);
+        stats = cJSON_Parse(val);
+        cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
+                                      cJSON_GetObjectItem(stats, "topkeys"),
+                                      0), "access_count")->valueint == 10);
+    }
+
     return SUCCESS;
 }
 
-static void append_stats(const char *key, const uint16_t klen,
-                         const char *val, const uint32_t vlen,
-                         const void *cookie) {
-    size_t needed;
-    conn *c = (conn*)cookie;
-    /* value without a key is invalid */
-    if (klen == 0 && vlen > 0) {
-        return;
+static enum test_result test_topkeys_standard(ENGINE_HANDLE *h,
+                                              ENGINE_HANDLE_V1 *h1) {
+    if (test_topkeys(h, h1, topkeys_standard) != SUCCESS) {
+        return FAIL;
     }
-
-    needed = vlen + klen + sizeof(protocol_binary_response_header);
-    if(!grow_dynamic_buffer(c, needed)) {
-        return;
-    }
-    append_bin_stats(key, klen, val, vlen, c);
-    cb_assert(c->dynamic_buffer.offset <= c->dynamic_buffer.size);
+    return SUCCESS;
 }
+
+static enum test_result test_topkeys_json(ENGINE_HANDLE *h,
+                                          ENGINE_HANDLE_V1 *h1) {
+    if (test_topkeys(h, h1, topkeys_json) != SUCCESS) {
+        return FAIL;
+    }
+    return SUCCESS;
+}
+
 
 /* Test json topkeys stats by sending ops on 'somekey' and then getting stats,
    comparing stats returned match those expected
    */
-static enum test_result test_topkeys_json(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
-    ENGINE_ERROR_CODE rv = ENGINE_SUCCESS;
-
-    /* Create cJSON object to store returned stats in */
-    cJSON *stats = cJSON_CreateObject();
-
-    const void *adm_cookie = mk_conn("admin", NULL);
-    int cmd;
-    void *pkt = create_create_bucket_pkt("someuser", ENGINE_PATH, "");
-    rv = h1->unknown_command(h, adm_cookie, pkt, add_response);
-    cb_assert(rv == ENGINE_SUCCESS);
-    free(pkt);
-
-    pkt = create_packet(PROTOCOL_BINARY_CMD_GET_REPLICA, "somekey", "someval");
-    rv = h1->unknown_command(h, adm_cookie, pkt, add_response);
-    cb_assert(rv == ENGINE_SUCCESS);
-    free(pkt);
-
-    for (cmd = 0x90; cmd < 0xff; ++cmd) {
-        pkt = create_packet(cmd, "somekey", "someval");
-        h1->unknown_command(h, adm_cookie, pkt, add_response);
-        free(pkt);
-    }
-
-    /* Get stats from (bucket) engine */
-    stats = h1->get_stats_json(h, adm_cookie, append_stats);
-
-    /* Assert that the JSON object has a count of 10 operations from previous
-       operations */
-    // cb_assert(strstr(&buffer.response, "\"access_count\":10"));
-    // cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
-    //                               cJSON_GetObjectItem(stats, "topkeys"),
-    //                               0), "access_count")->valueint == 10);
-    return SUCCESS;
-}
+// static enum test_result test_topkeys_json(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
+//     ENGINE_ERROR_CODE rv = ENGINE_SUCCESS;
+//
+//     /* Create cJSON object to store returned stats in */
+//     cJSON *stats = cJSON_CreateObject();
+//
+//     const void *adm_cookie = mk_conn("admin", NULL);
+//     int cmd;
+//     void *pkt = create_create_bucket_pkt("someuser", ENGINE_PATH, "");
+//     rv = h1->unknown_command(h, adm_cookie, pkt, add_response);
+//     cb_assert(rv == ENGINE_SUCCESS);
+//     free(pkt);
+//
+//     pkt = create_packet(PROTOCOL_BINARY_CMD_GET_REPLICA, "somekey", "someval");
+//     rv = h1->unknown_command(h, adm_cookie, pkt, add_response);
+//     cb_assert(rv == ENGINE_SUCCESS);
+//     free(pkt);
+//
+//     for (cmd = 0x90; cmd < 0xff; ++cmd) {
+//         pkt = create_packet(cmd, "somekey", "someval");
+//         h1->unknown_command(h, adm_cookie, pkt, add_response);
+//         free(pkt);
+//     }
+//
+//     /* Get stats from (bucket) engine */
+//     stats = h1->get_stats_json(h, adm_cookie, append_stats);
+//
+//
+//     // cb_assert(strstr(&buffer.response, "\"access_count\":10"));
+//     // cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
+//     //                               cJSON_GetObjectItem(stats, "topkeys"),
+//     //                               0), "access_count")->valueint == 10);
+//     return SUCCESS;
+// }
 
 static ENGINE_HANDLE_V1 *start_your_engines(const char *cfg) {
     ENGINE_HANDLE_V1 *h = (ENGINE_HANDLE_V1 *)load_engine(BUCKET_ENGINE_PATH, cfg);
@@ -1980,7 +2000,7 @@ int main(int argc, char **argv) {
          test_concurrent_connect_disconnect, NULL },
         {"concurrent connect/disconnect (tap)",
          test_concurrent_connect_disconnect_tap, NULL },
-        {"topkeys", test_topkeys, NULL },
+        {"topkeys", test_topkeys_standard, NULL },
         {"jsonic topkeys", test_topkeys_json, NULL },
         {NULL, NULL, NULL}
     };

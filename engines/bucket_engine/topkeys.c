@@ -199,15 +199,15 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
  *    ]
  * }
  */
- cJSON* topkeys_json_stats(topkeys_t **tks, size_t shards,
-                    const void *cookie,
+ENGINE_ERROR_CODE topkeys_json_stats(topkeys_t **tks, cJSON *object,
+                    size_t shards,
+                    // const void *cookie,
                     const rel_time_t current_time) {
     printf("topkeys_json_stats\n");
     struct tk_context context;
     size_t ii;
-    cJSON *stats = cJSON_CreateObject();
     cJSON *topkeys = cJSON_CreateArray();
-    context.cookie = cookie;
+    // context.cookie = cookie;    //TODO: cookie to blame?? Check what bucket_testapp passed previously
     context.current_time = current_time;
     context.array = topkeys;
     for (ii = 0; ii < shards; ii++) {
@@ -220,9 +220,10 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
         }
         cb_mutex_exit(&tk->mutex);
     }
-    cJSON_AddItemToObject(stats, "topkeys", topkeys);
-    printf("%s\n", cJSON_Print(stats));
-    return stats;
+    cJSON_AddItemToObject(object, "topkeys", topkeys);
+    printf("%s\n", cJSON_Print(object));
+
+    return ENGINE_SUCCESS;
 }
 
 topkeys_t *tk_get_shard(topkeys_t **tks, const void *key, size_t nkey) {

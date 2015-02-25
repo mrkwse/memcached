@@ -387,10 +387,6 @@ extern "C" {
                                        int nkey,
                                        ADD_STAT add_stat);
 
-        void (*get_stats_json)(ENGINE_HANDLE* handle,
-                               const void* cookie,
-                               ADD_STAT add_stat);
-
         /**
          * Reset the stats.
          *
