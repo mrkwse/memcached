@@ -1891,6 +1891,8 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
     ENGINE_ERROR_CODE rc;
     proxied_engine_handle_t *peh;
 
+    printf("bucket_get_stats\n");
+
     /* Intercept bucket stats. */
     if (nkey == (sizeof("bucket") - 1) &&
         memcmp("bucket", stat_key, nkey) == 0) {
@@ -1909,16 +1911,18 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
                   memcmp("topkeys_json", stat_key, nkey) == 0) {
             cJSON *stats = cJSON_CreateObject();
 
-            if (topkeys_json_stats(peh->topkeys, stats, TK_SHARDS,
-                                   get_current_time()) == 0) {
-                char key[] = "topkeys_json";
-                char *stats_str = cJSON_PrintUnformatted(stats);
-                add_stat(key, (uint16_t)strlen(key),
-                         stats_str, (uint32_t)strlen(stats_str), cookie);
-                free(stats_str);
-            } else {
-                rc = ENGINE_FAILED;
-            }
+            printf("bucket_enigne\n");
+
+            // if (topkeys_json_stats(peh->topkeys, stats, TK_SHARDS,
+            //                        get_current_time()) == 0) {
+            //     char key[] = "topkeys_json";
+            //     char *stats_str = cJSON_PrintUnformatted(stats);
+            //     add_stat(key, (uint16_t)strlen(key),
+            //              stats_str, (uint32_t)strlen(stats_str), cookie);
+            //     free(stats_str);
+            // } else {
+            //     rc = ENGINE_FAILED;
+            // }
             cJSON_Delete(stats);
         } else {
             rc = peh->pe.v1->get_stats(peh->pe.v0, cookie, stat_key,
@@ -2155,8 +2159,8 @@ static void bucket_item_set_cas(ENGINE_HANDLE *handle, const void *cookie,
 }
 
 /**
- * Implenentation of the tap notify in the bucket engine. Verify
- * that the bucket exists (and is in the correct state) before
+ * Implenentation of the tap notify in the bucket engine. Verif˚y
+ * that the bucket exists (and is in the correct state) before˚
  * wrapping into the engines implementationof tap notify.
  */
 static ENGINE_ERROR_CODE bucket_tap_notify(ENGINE_HANDLE* handle,

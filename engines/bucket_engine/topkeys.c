@@ -159,6 +159,7 @@ static void tk_iterfunc(dlist_t *list, void *arg) {
 static void tk_jsonfunc(dlist_t *list, void *arg) {
     struct tk_context *c = arg;
     topkey_item_t *it = (topkey_item_t*)list;
+    cb_assert(it != NULL);
     cJSON *key = cJSON_CreateObject();
     cJSON_AddItemToObject(key, "key", cJSON_CreateString((char *)(it + 1)));
     cJSON_AddItemToObject(key, "access_count",
@@ -167,6 +168,7 @@ static void tk_jsonfunc(dlist_t *list, void *arg) {
                           cJSON_CreateNumber(c->current_time - it->ti_ctime));
     cJSON_AddItemToObject(key, "atime",
                           cJSON_CreateNumber(c->current_time - it->ti_atime));
+    cb_assert(c->array != NULL);
     cJSON_AddItemToArray(c->array, key);
 }
 

@@ -411,7 +411,7 @@ static void get_working_current_directory(char* out_buf, int out_buf_len) {
     }
 }
 
-static cJSON *generate_config(char *engine)
+static cJSON *generate_config(const char *engine)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON *array = cJSON_CreateArray();
@@ -1141,7 +1141,8 @@ static enum test_return stop_memcached_server(void) {
 
     remove(config_file);
     remove(isasl_file);
-    // free(isasl_file);
+    free(isasl_file);
+    isasl_file = NULL;
     remove(rbac_file);
 
     printf("squawk\n");
