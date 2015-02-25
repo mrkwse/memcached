@@ -4854,8 +4854,8 @@ static void stat_executor(conn *c, void *packet)
                                                 info->description ?
                                                 info->description : "Unknown");
 
-            settings.engine.v1->get_stats_json(settings.engine.v0, c,
-                                               append_stats);       ///FIXME
+            // settings.engine.v1->get_stats_json(settings.engine.v0, c,
+            //                                    append_stats);       ///FIXME
         } else {
             ret = settings.engine.v1->get_stats(settings.engine.v0, c,
                                                 subcommand, (int)nkey,

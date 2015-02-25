@@ -1694,6 +1694,7 @@ static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1,
         cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
                                       cJSON_GetObjectItem(stats, "topkeys"),
                                       0), "access_count")->valueint == 10);
+        printf("this is the parsed JSON, woot!: \n%s\n", cJSON_Print(stats));
     }
 
     return SUCCESS;
@@ -1932,74 +1933,74 @@ int main(int argc, char **argv) {
     int errors = 0;
 
     struct test tests[] = {
-        {"get info", test_get_info, NULL},
-        {"default storage", test_default_storage, NULL},
-        {"default storage key overrun", test_default_storage_key_overrun, NULL},
-        {"default unlinked remove", test_default_unlinked_remove, NULL},
-        {"no default storage",
-         test_no_default_storage,
-#ifdef WIN32
-         "engine=bucket_engine_mock_engine.dll;default=false"
-#else
-         "engine=bucket_engine_mock_engine.so;default=false"
-#endif
-        },
-        {"user storage with no default",
-         test_two_engines,
-#ifdef WIN32
-         "engine=bucket_engine_mock_engine.dll;default=false"
-#else
-         "engine=bucket_engine_mock_engine.so;default=false"
-#endif
-        },
-        {"distinct storage", test_two_engines, DEFAULT_CONFIG_AC},
-        {"distinct storage (no auto-create)", test_two_engines_no_autocreate,
-         DEFAULT_CONFIG_NO_DEF},
-        {"delete from one of two nodes", test_two_engines_del,
-         DEFAULT_CONFIG_AC},
-        {"flush from one of two nodes", test_two_engines_flush,
-         DEFAULT_CONFIG_AC},
-        {"isolated arithmetic", test_arith, DEFAULT_CONFIG_AC},
-        {"create bucket", test_create_bucket, DEFAULT_CONFIG_NO_DEF},
-        {"double create bucket", test_double_create_bucket,
-         DEFAULT_CONFIG_NO_DEF},
-        {"create bucket with params", test_create_bucket_with_params,
-         DEFAULT_CONFIG_NO_DEF},
-        {"create bucket with cas", test_create_bucket_with_cas,
-         DEFAULT_CONFIG_NO_DEF},
-        {"bucket name verification", test_bucket_name_validation, NULL},
-        {"delete bucket", test_delete_bucket,
-         DEFAULT_CONFIG_NO_DEF},
-        {"delete bucket (same connection)", test_delete_bucket_sameconnection,
-         DEFAULT_CONFIG_NO_DEF},
-        {"concurrent access delete bucket", test_delete_bucket_concurrent,
-         DEFAULT_CONFIG_NO_DEF},
-        {"concurrent access delete bucket multiple times", test_delete_bucket_concurrent_multi,
-         DEFAULT_CONFIG_NO_DEF},
-        {"delete bucket shutdwn race", test_delete_bucket_shutdown_race,
-         DEFAULT_CONFIG_NO_DEF},
-        {"list buckets with none", test_list_buckets_none, NULL},
-        {"list buckets with one", test_list_buckets_one, NULL},
-        {"list buckets", test_list_buckets_two, NULL},
-        {"fail to select a bucket when not admin", test_select_no_admin, NULL},
-        {"select a bucket as admin", test_select, DEFAULT_CONFIG_AC},
-        {"fail to select non-existent bucket as admin",
-         test_select_no_bucket, NULL},
-        {"stats call", test_stats, NULL},
-        {"stats bucket call", test_stats_bucket, NULL},
-        {"release call", test_release, NULL},
-        {"unknown call delegation", test_unknown_call, NULL},
-        {"unknown call delegation (no bucket)", test_unknown_call_no_bucket,
-         DEFAULT_CONFIG_NO_DEF},
-        {"admin verification", test_admin_user, NULL},
-        {"auto create with config", test_auto_config,
-         DEFAULT_CONFIG_AC},
-        {"get tap iterator", test_get_tap_iterator, NULL},
-        {"tap notify", test_tap_notify, NULL},
-        {"concurrent connect/disconnect",
-         test_concurrent_connect_disconnect, NULL },
-        {"concurrent connect/disconnect (tap)",
-         test_concurrent_connect_disconnect_tap, NULL },
+//         {"get info", test_get_info, NULL},
+//         {"default storage", test_default_storage, NULL},
+//         {"default storage key overrun", test_default_storage_key_overrun, NULL},
+//         {"default unlinked remove", test_default_unlinked_remove, NULL},
+//         {"no default storage",
+//          test_no_default_storage,
+// #ifdef WIN32
+//          "engine=bucket_engine_mock_engine.dll;default=false"
+// #else
+//          "engine=bucket_engine_mock_engine.so;default=false"
+// #endif
+//         },
+//         {"user storage with no default",
+//          test_two_engines,
+// #ifdef WIN32
+//          "engine=bucket_engine_mock_engine.dll;default=false"
+// #else
+//          "engine=bucket_engine_mock_engine.so;default=false"
+// #endif
+//         },
+//         {"distinct storage", test_two_engines, DEFAULT_CONFIG_AC},
+//         {"distinct storage (no auto-create)", test_two_engines_no_autocreate,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"delete from one of two nodes", test_two_engines_del,
+//          DEFAULT_CONFIG_AC},
+//         {"flush from one of two nodes", test_two_engines_flush,
+//          DEFAULT_CONFIG_AC},
+//         {"isolated arithmetic", test_arith, DEFAULT_CONFIG_AC},
+//         {"create bucket", test_create_bucket, DEFAULT_CONFIG_NO_DEF},
+//         {"double create bucket", test_double_create_bucket,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"create bucket with params", test_create_bucket_with_params,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"create bucket with cas", test_create_bucket_with_cas,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"bucket name verification", test_bucket_name_validation, NULL},
+//         {"delete bucket", test_delete_bucket,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"delete bucket (same connection)", test_delete_bucket_sameconnection,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"concurrent access delete bucket", test_delete_bucket_concurrent,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"concurrent access delete bucket multiple times", test_delete_bucket_concurrent_multi,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"delete bucket shutdwn race", test_delete_bucket_shutdown_race,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"list buckets with none", test_list_buckets_none, NULL},
+//         {"list buckets with one", test_list_buckets_one, NULL},
+//         {"list buckets", test_list_buckets_two, NULL},
+//         {"fail to select a bucket when not admin", test_select_no_admin, NULL},
+//         {"select a bucket as admin", test_select, DEFAULT_CONFIG_AC},
+//         {"fail to select non-existent bucket as admin",
+//          test_select_no_bucket, NULL},
+//         {"stats call", test_stats, NULL},
+//         {"stats bucket call", test_stats_bucket, NULL},
+//         {"release call", test_release, NULL},
+//         {"unknown call delegation", test_unknown_call, NULL},
+//         {"unknown call delegation (no bucket)", test_unknown_call_no_bucket,
+//          DEFAULT_CONFIG_NO_DEF},
+//         {"admin verification", test_admin_user, NULL},
+//         {"auto create with config", test_auto_config,
+//          DEFAULT_CONFIG_AC},
+//         {"get tap iterator", test_get_tap_iterator, NULL},
+//         {"tap notify", test_tap_notify, NULL},
+//         {"concurrent connect/disconnect",
+//          test_concurrent_connect_disconnect, NULL },
+//         {"concurrent connect/disconnect (tap)",
+//          test_concurrent_connect_disconnect_tap, NULL },
         {"topkeys", test_topkeys_standard, NULL },
         {"jsonic topkeys", test_topkeys_json, NULL },
         {NULL, NULL, NULL}

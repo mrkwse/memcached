@@ -61,8 +61,8 @@ static int current_phase = 0;
 static int phases_enabled = phase_setup | phase_plain | phase_ssl | phase_cleanup;
 
 /* engine types */
-#define DEFAULT_ENGINE = "default_engine.so"
-#define BUCKET_ENGINE = "bucket_engine.so"
+#define DEFAULT_ENGINE "default_engine.so"
+#define BUCKET_ENGINE "bucket_engine.so"
 
 static pid_t server_pid;
 static in_port_t port = -1;
