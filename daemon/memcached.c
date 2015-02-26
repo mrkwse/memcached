@@ -4845,18 +4845,19 @@ static void stat_executor(conn *c, void *packet)
                 }
             }
             connection_stats(&append_stats, c, fd);
-        } else if (strncmp(subcommand, "topkeys_json", strlen("topkeys_json")) == 0) {
-
-            const engine_info *info = settings.engine.v1->get_info(settings.engine.v0);
-            //
-            // char message[4096];
-            printf("Loaded engine: %s\n",
-                                                info->description ?
-                                                info->description : "Unknown");
-
-            ret = settings.engine.v1->get_stats(settings.engine.v0, c,
-                                                subcommand, (int)nkey,
-                                                append_stats);
+        // FIXME: Get rid up to 4828
+        // } else if (strncmp(subcommand, "topkeys_json", strlen("topkeys_json")) == 0) {
+        //
+        //     const engine_info *info = settings.engine.v1->get_info(settings.engine.v0);
+        //     //
+        //     // char message[4096];
+        //     printf("Loaded engine: %s\n",
+        //                                         info->description ?
+        //                                         info->description : "Unknown");
+        //
+        //     ret = settings.engine.v1->get_stats(settings.engine.v0, c,
+        //                                         subcommand, (int)nkey,
+        //                                         append_stats);
         } else {
             ret = settings.engine.v1->get_stats(settings.engine.v0, c,
                                                 subcommand, (int)nkey,

@@ -1902,7 +1902,9 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
     rc = ENGINE_NO_BUCKET;
     peh = get_engine_handle(handle, cookie);
 
+    // TODO: peh is null at this point in memcached_testapp. Possible misconfiguration.
     if (peh) {
+        printf("preif\n");
         if (nkey == (sizeof("topkeys") - 1) &&
             memcmp("topkeys", stat_key, nkey) == 0) {
             rc = topkeys_stats(peh->topkeys, TK_SHARDS, cookie, get_current_time(),
@@ -1913,18 +1915,19 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
 
             printf("bucket_enigne\n");
 
-            // if (topkeys_json_stats(peh->topkeys, stats, TK_SHARDS,
-            //                        get_current_time()) == 0) {
-            //     char key[] = "topkeys_json";
-            //     char *stats_str = cJSON_PrintUnformatted(stats);
-            //     add_stat(key, (uint16_t)strlen(key),
-            //              stats_str, (uint32_t)strlen(stats_str), cookie);
-            //     free(stats_str);
-            // } else {
-            //     rc = ENGINE_FAILED;
-            // }
+            if (topkeys_json_stats(peh->topkeys, stats, TK_SHARDS,
+                                   get_current_time()) == 0) {
+                char key[] = "topkeys_json";
+                char *stats_str = cJSON_PrintUnformatted(stats);
+                add_stat(key, (uint16_t)strlen(key),
+                         stats_str, (uint32_t)strlen(stats_str), cookie);
+                free(stats_str);
+            } else {
+                rc = ENGINE_FAILED;
+            }
             cJSON_Delete(stats);
         } else {
+            printf("final else\n");
             rc = peh->pe.v1->get_stats(peh->pe.v0, cookie, stat_key,
                                        nkey, add_stat);
             if (nkey == 0) {
@@ -1939,6 +1942,7 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
         }
         release_engine_handle(peh);
     }
+    printf("return rc\n");
     return rc;
 }
 

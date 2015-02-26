@@ -2467,12 +2467,13 @@ static bool create_bucket() {
                             //  strlen(args) + 1);
 
     safe_send(buffer.bytes, len, false);
-    // do {
-    //     safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-    //     validate_response_header(&buffer.response,
-    //                              PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-    //                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    // } while (buffer.response.message.header.response.keylen != 0);
+    do {
+        safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+        validate_response_header(&buffer.response,
+                                 PROTOCOL_BINARY_CMD_CREATE_BUCKET,
+                                 PROTOCOL_BINARY_RESPONSE_SUCCESS);
+        printf("validate\n");                                           //FIXME not being hit it would seem
+    } while (buffer.response.message.header.response.keylen != 0);
 
     return true;
 }
