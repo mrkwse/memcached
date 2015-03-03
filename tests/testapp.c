@@ -427,7 +427,7 @@ static cJSON *generate_config(const char *engine)
     strncat(pem_path, CERTIFICATE_PATH(testapp.pem), 256);
     strncat(cert_path, CERTIFICATE_PATH(testapp.cert), 256);
 
-    cJSON_AddStringToObject(obj, "module", engine);    // TODO:: check is definitely to change elsewhere
+    cJSON_AddStringToObject(obj, "module", engine);
     cJSON_AddItemReferenceToObject(root, "engine", obj);
 
     // obj = cJSON_CreateObject();
@@ -467,10 +467,10 @@ static cJSON *generate_config(const char *engine)
     }
     cJSON_AddItemReferenceToObject(root, "interfaces", array);
 
-    cJSON_AddStringToObject(root, "admin", "");
+    cJSON_AddStringToObject(root, "admin", "");     //TODO may need changing for bucket auth
     cJSON_AddTrueToObject(root, "datatype_support");
     cJSON_AddStringToObject(root, "rbac_file", rbac_path);
-    cJSON_AddNumberToObject(root, "verbosity", 2);
+    // cJSON_AddNumberToObject(root, "verbosity", 2);
 
     return root;
 }
@@ -642,16 +642,17 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
 
         argv[arg++] = NULL;
         cb_assert(execvp(argv[0], argv) != -1);
+        printf("Child pid:%i", pid);
     }
 #endif // !WIN32
 
-    printf("busy-wait\n");
+    // printf("busy-wait\n");
     /* Yeah just let us "busy-wait" for the file to be created ;-) */
     while (access(filename, F_OK) == -1) {
         usleep(10);
     }
 
-    printf("fopen\n");
+    // printf("fopen\n");
     fp = fopen(filename, "r");
     if (fp == NULL) {
         fprintf(stderr, "Failed to open the file containing port numbers: %s\n",
@@ -662,7 +663,7 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
     *port_out = (in_port_t)-1;
     *ssl_port_out = (in_port_t)-1;
 
-    printf("while\n");
+    // printf("while\n");
     while ((fgets(buffer, sizeof(buffer), fp)) != NULL) {
         if (strncmp(buffer, "TCP INET: ", 10) == 0) {
             int32_t val;
@@ -680,6 +681,8 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
 #ifdef WIN32
     return pinfo.hProcess;
 #else
+    printf("Parent pid:%i", pid);
+    getchar();
     return pid;
 #endif
 }
@@ -2434,8 +2437,6 @@ static enum test_return test_stat_connections(void) {
 }
 
 static bool create_bucket() {
-
-    char buf[1024];
     // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
     // union {
     //     protocol_binary_request_no_extras request;
@@ -2450,29 +2451,37 @@ static bool create_bucket() {
     union {
         protocol_binary_request_no_extras request;
         protocol_binary_response_no_extras response;
-        char bytes[1024];
+        char bytes[2056];
     } buffer;
+
+    char buf[1024];
     //
-    char *user = "someuser";
-    char *path /* = ENGINE_PATH*/;
+    char *user = "_admin";
+    char *path = "bucket_engine.so"; /* = ENGINE_PATH*/ //FIXME: Windows
     char *args = "";
+
+    snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
+
     //
     size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
                              PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-                             user, strlen(user), NULL, 0);
+                             user, strlen(user), buf, strlen(path) + strlen(args) + 1);
                             //  NULL, 0, NULL, 0);
                             //  user, strlen(user), buf,
                             //  strlen(buf);
                             //  strlen(path) +
                             //  strlen(args) + 1);
 
-    safe_send(buffer.bytes, len, false);
+    // if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+        safe_send(buffer.bytes, len, false);
+    // }
+
+
     do {
         safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
         validate_response_header(&buffer.response,
                                  PROTOCOL_BINARY_CMD_CREATE_BUCKET,
                                  PROTOCOL_BINARY_RESPONSE_SUCCESS);
-        printf("validate\n");                                           //FIXME not being hit it would seem
     } while (buffer.response.message.header.response.keylen != 0);
 
     return true;
@@ -4467,7 +4476,10 @@ static uint16_t sasl_auth(const char *username, const char *password) {
                            PROTOCOL_BINARY_CMD_SASL_STEP,
                            chosenmech, strlen(chosenmech), data, len);
 
-        safe_send(buffer.bytes, plen, false);
+        safe_send(buffer.bytes, plen, false);       //FIXME: RETURNS Could not
+                                                    // find the function to create
+                                                    // engine in self: ./memcached:
+                                                    // undefined symbol: create_ep_engine_instance
 
         safe_recv_packet(&buffer, sizeof(buffer));
     }
@@ -4664,6 +4676,8 @@ struct testcase testcases[] = {
        bucket_engine in place of deafault_engine.                    */
     TESTCASE_SETUP("start_bucket_server", start_bucket_server),
     TESTCASE_PLAIN("connect", test_connect_to_server),
+    TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
+    TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
     // TESTCASE_PLAIN_AND_SSL("will_it_blend", test_stat),
     TESTCASE_PLAIN("topkeys", test_topkeys),
     TESTCASE_CLEANUP("stop_bucket_server", stop_memcached_server),
