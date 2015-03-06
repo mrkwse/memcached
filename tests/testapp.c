@@ -641,10 +641,13 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
         argv[arg++] = (char*)config_file;
 
         argv[arg++] = NULL;
-        cb_assert(execvp(argv[0], argv) != -1);
+       	getchar();
+	cb_assert(execvp(argv[0], argv) != -1);
         printf("Child pid:%i", pid);
     }
 #endif // !WIN32
+
+    printf("Parent pid:%i", pid);
 
     // printf("busy-wait\n");
     /* Yeah just let us "busy-wait" for the file to be created ;-) */
@@ -2449,7 +2452,7 @@ static bool create_bucket() {
     //                       buf, strlen(path) + strlen(args) + 1, 0);
 
     union {
-        protocol_binary_request_no_extras request;
+        protocol_binary_request_create_bucket request;
         protocol_binary_response_no_extras response;
         char bytes[2056];
     } buffer;
@@ -2457,8 +2460,8 @@ static bool create_bucket() {
     char buf[1024];
     //
     char *user = "_admin";
-    char *path = "bucket_engine.so"; /* = ENGINE_PATH*/ //FIXME: Windows
-    char *args = "";
+    char *path = "/usr/Developer/Projects/couchbase/install/lib/memcached/ep.so"; /* = ENGINE_PATH*/ //FIXME: Windows
+    char *args = "name=default&ramQuotaMB=128&authType=sasl";
 
     snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
 
@@ -2484,6 +2487,51 @@ static bool create_bucket() {
                                  PROTOCOL_BINARY_RESPONSE_SUCCESS);
     } while (buffer.response.message.header.response.keylen != 0);
 
+    return true;
+}
+
+static bool create_bucket_new() {
+
+    // union {
+    //     protocol_binary_request_no_extras request;
+    //     protocol_binary_response_noextras response;
+    //     char bytes[2056];
+    // } buffer;
+
+    // char *config = "name=default&ramQuotaMB=128&authType=sasl"  //FIXME
+    //
+    // union {
+    //     char buffer[1024];
+    //     protocol_binary_request_create_bucket req;
+    // } request;
+    //
+    // memset(&request.buffer, 0, sizeof(request.buffer));
+    //
+    // request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
+    // request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+    //
+    // //
+    // size_t offset = sizeof(request.req.bytes);
+    // size_t len = strlen(config[optind++]);
+    // memcpy(request.buffer + offer, config[optind++], len);
+    // offset += len;
+    //
+    // request.req.message.header.request.keylen = htons((uint16_t)(offset -
+    //                                                     sizeof(request.req.bytes)));
+    //
+    // // Type
+    // len = strlen(config[optind]);
+    // memcpy(request.buffer + offset, config[optind++], len);
+    // offset += len + 1;
+    //
+    // // Config
+    // len = strlen(config[optind]);
+    // memcpy(request.buffer + offset, config[optind], len);
+    // offset += len;
+    // request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
+    //                             sizeof(request.req.bytes)));
+    //
+    // ensure_send(bio, &request.buffer, (int)offset);
     return true;
 }
 
@@ -4675,9 +4723,10 @@ struct testcase testcases[] = {
     /* The following tests all run on an instance of memcached using
        bucket_engine in place of deafault_engine.                    */
     TESTCASE_SETUP("start_bucket_server", start_bucket_server),
+    // TESTCASE_SETUP("start_default_server", start_memcached_server),
     TESTCASE_PLAIN("connect", test_connect_to_server),
-    TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
-    TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
+    // TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
+    // TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
     // TESTCASE_PLAIN_AND_SSL("will_it_blend", test_stat),
     TESTCASE_PLAIN("topkeys", test_topkeys),
     TESTCASE_CLEANUP("stop_bucket_server", stop_memcached_server),
