@@ -2439,7 +2439,7 @@ static enum test_return test_stat_connections(void) {
     return TEST_PASS;
 }
 
-static bool create_bucket() {
+static bool create_bucket_old() {
     // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
     // union {
     //     protocol_binary_request_no_extras request;
@@ -2490,48 +2490,55 @@ static bool create_bucket() {
     return true;
 }
 
-static bool create_bucket_new() {
+static bool create_bucket() {
 
-    // union {
-    //     protocol_binary_request_no_extras request;
-    //     protocol_binary_response_noextras response;
-    //     char bytes[2056];
-    // } buffer;
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_noextras response;
+        char bytes[2056];
+    } buffer;
 
-    // char *config = "name=default&ramQuotaMB=128&authType=sasl"  //FIXME
+    cJSON *config_json = cJSON_CreateObject();
+    cJSON_AddStringToObject(config_json, "name", "default");
+    cJSON_AddStringToObject(config_json, "type", "couchbase");
+    cJSON_AddNumberToObject(config_json, "ramQuotaMB", "128");
+    cJSON_AddStringToObject(config_json, "authType", "sasl");
+
+    char *config = cJSON_Print(config_json);
+    // char *config = "name=default&type=couchbase&ramQuotaMB=128&authType=sasl"  //FIXME
+
+    union {
+        char buffer[1024];
+        protocol_binary_request_create_bucket req;
+    } request;
+
+    memset(&request.buffer, 0, sizeof(request.buffer));
+
+    request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
+    request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+
     //
-    // union {
-    //     char buffer[1024];
-    //     protocol_binary_request_create_bucket req;
-    // } request;
-    //
-    // memset(&request.buffer, 0, sizeof(request.buffer));
-    //
-    // request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
-    // request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
-    //
-    // //
-    // size_t offset = sizeof(request.req.bytes);
-    // size_t len = strlen(config[optind++]);
-    // memcpy(request.buffer + offer, config[optind++], len);
-    // offset += len;
-    //
-    // request.req.message.header.request.keylen = htons((uint16_t)(offset -
-    //                                                     sizeof(request.req.bytes)));
-    //
-    // // Type
-    // len = strlen(config[optind]);
-    // memcpy(request.buffer + offset, config[optind++], len);
-    // offset += len + 1;
-    //
-    // // Config
-    // len = strlen(config[optind]);
-    // memcpy(request.buffer + offset, config[optind], len);
-    // offset += len;
-    // request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
-    //                             sizeof(request.req.bytes)));
-    //
-    // ensure_send(bio, &request.buffer, (int)offset);
+    size_t offset = sizeof(request.req.bytes);
+    size_t len = strlen(config[optind++]);
+    memcpy(request.buffer + offer, config[optind++], len);
+    offset += len;
+
+    request.req.message.header.request.keylen = htons((uint16_t)(offset -
+                                                        sizeof(request.req.bytes)));
+
+    // Type
+    len = strlen(config[optind]);
+    memcpy(request.buffer + offset, config[optind++], len);
+    offset += len + 1;
+
+    // Config
+    len = strlen(config[optind]);
+    memcpy(request.buffer + offset, config[optind], len);
+    offset += len;
+    request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
+                                sizeof(request.req.bytes)));
+
+    ensure_send(bio, &request.buffer, (int)offset);
     return true;
 }
 
