@@ -276,7 +276,7 @@ static void settings_init(void) {
     settings.num_threads = get_number_of_worker_threads();
     settings.require_sasl = false;
     settings.extensions.logger = get_stderr_logger();
-    settings.engine_module = "default_engine.so";           //TODO: Changing to bucket_engine likely issue
+    settings.engine_module = "default_engine.so";
     settings.engine_config = NULL;
     settings.config = NULL;
     settings.admin = NULL;

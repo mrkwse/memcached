@@ -2439,7 +2439,7 @@ static enum test_return test_stat_connections(void) {
     return TEST_PASS;
 }
 
-static bool create_bucket_old() {
+static bool create_bucket() {
     // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
     // union {
     //     protocol_binary_request_no_extras request;
@@ -2454,29 +2454,54 @@ static bool create_bucket_old() {
     union {
         protocol_binary_request_create_bucket request;
         protocol_binary_response_no_extras response;
-        char bytes[2056];
+        char bytes[2048];
     } buffer;
 
-    char buf[1024];
-    //
-    char *user = "_admin";
-    char *path = "/usr/Developer/Projects/couchbase/install/lib/memcached/ep.so"; /* = ENGINE_PATH*/ //FIXME: Windows
-    char *args = "name=default&ramQuotaMB=128&authType=sasl";
+    char *name = "top_test";
+    char *type = "couchase";
+    char *config = "config='ramQuotaMB=128&authType=sasl'";
 
-    snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
+    buffer.request.message.header.request.magic = PROTOCOL_BINARY_REQ;
+    buffer.request.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
 
+    size_t offset = sizeof(buffer.bytes);
+    size_t len = strlen(name);
+    memcpy(buffer.bytes + offset, name, len);
+    offset += len;
+
+    buffer.request.message.header.request.keylen = htons((uint16_t)(offset -
+                                                              sizeof(buffer.bytes)));
+
+    len = strlen(type);
+    memcpy(buffer.bytes + offset, type, len);
+    offset += len + 1;
+
+    len = strlen(config);
+    memcpy(buffer.bytes + offset, config, len);
+    offset += len;
+    buffer.request.message.header.request.bodylen = htonl((uint32_t)(offset -
+                                    sizeof(buffer.bytes)));
+
+    // char buf[1024];
+    // //
+    // char *user = "_admin";
+    // char *path = "/usr/Developer/Projects/couchbase/install/lib/memcached/ep.so"; /* = ENGINE_PATH*/ //FIXME: Windows
+    // char *args = "name=default&ramQuotaMB=128&authType=sasl";
     //
-    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-                             PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-                             user, strlen(user), buf, strlen(path) + strlen(args) + 1);
-                            //  NULL, 0, NULL, 0);
-                            //  user, strlen(user), buf,
-                            //  strlen(buf);
-                            //  strlen(path) +
-                            //  strlen(args) + 1);
+    // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
+    //
+    // //
+    // size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+    //                          PROTOCOL_BINARY_CMD_CREATE_BUCKET,
+    //                          user, strlen(user), buf, strlen(path) + strlen(args) + 1);
+    //                         //  NULL, 0, NULL, 0);
+    //                         //  user, strlen(user), buf,
+    //                         //  strlen(buf);
+    //                         //  strlen(path) +
+    //                         //  strlen(args) + 1);
 
     // if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-        safe_send(buffer.bytes, len, false);
+        safe_send(buffer.bytes, (int)offset, false);
     // }
 
 
@@ -2490,55 +2515,58 @@ static bool create_bucket_old() {
     return true;
 }
 
-static bool create_bucket() {
+static bool create_bucket_n() {
 
-    union {
-        protocol_binary_request_no_extras request;
-        protocol_binary_response_noextras response;
-        char bytes[2056];
-    } buffer;
-
-    cJSON *config_json = cJSON_CreateObject();
-    cJSON_AddStringToObject(config_json, "name", "default");
-    cJSON_AddStringToObject(config_json, "type", "couchbase");
-    cJSON_AddNumberToObject(config_json, "ramQuotaMB", "128");
-    cJSON_AddStringToObject(config_json, "authType", "sasl");
-
-    char *config = cJSON_Print(config_json);
-    // char *config = "name=default&type=couchbase&ramQuotaMB=128&authType=sasl"  //FIXME
-
-    union {
-        char buffer[1024];
-        protocol_binary_request_create_bucket req;
-    } request;
-
-    memset(&request.buffer, 0, sizeof(request.buffer));
-
-    request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
-    request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
-
+    // union {
+    //     protocol_binary_request_no_extras request;
+    //     protocol_binary_response_no_extras response;
+    //     char bytes[2056];
+    // } buffer;
     //
-    size_t offset = sizeof(request.req.bytes);
-    size_t len = strlen(config[optind++]);
-    memcpy(request.buffer + offer, config[optind++], len);
-    offset += len;
-
-    request.req.message.header.request.keylen = htons((uint16_t)(offset -
-                                                        sizeof(request.req.bytes)));
-
-    // Type
-    len = strlen(config[optind]);
-    memcpy(request.buffer + offset, config[optind++], len);
-    offset += len + 1;
-
-    // Config
-    len = strlen(config[optind]);
-    memcpy(request.buffer + offset, config[optind], len);
-    offset += len;
-    request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
-                                sizeof(request.req.bytes)));
-
-    ensure_send(bio, &request.buffer, (int)offset);
+    // // cJSON *config_json = cJSON_CreateObject();
+    // // cJSON_AddStringToObject(config_json, "name", "default");
+    // // cJSON_AddStringToObject(config_json, "type", "couchbase");
+    // // cJSON_AddNumberToObject(config_json, "ramQuotaMB", "128");
+    // // cJSON_AddStringToObject(config_json, "authType", "sasl");
+    // char *name = "top_test";
+    // char *type = "couchbase";
+    // char *config = "config='ramQuotaMB=128&authType=sasl'";
+    //
+    // char *config = cJSON_Print(config_json);
+    // // char *config = "name=default&type=couchbase&ramQuotaMB=128&authType=sasl"  //FIXME
+    //
+    // union {
+    //     char buffer[1024];
+    //     protocol_binary_request_create_bucket req;
+    // } request;
+    //
+    // memset(&request.buffer, 0, sizeof(request.buffer));
+    //
+    // request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
+    // request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+    //
+    // // Name
+    // size_t offset = sizeof(request.req.bytes);
+    // size_t len = strlen(name);
+    // memcpy(request.buffer + offer, name, len);
+    // offset += len;
+    //
+    // request.req.message.header.request.keylen = htons((uint16_t)(offset -
+    //                                                     sizeof(request.req.bytes)));
+    //
+    // // Type
+    // len = strlen(type);
+    // memcpy(request.buffer + offset, type, len);
+    // offset += len + 1;
+    //
+    // // Config
+    // len = strlen(config[optind]);
+    // memcpy(request.buffer + offset, config, len);
+    // offset += len;
+    // request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
+    //                             sizeof(request.req.bytes)));
+    //
+    // ensure_send(bio, &request.buffer, (int)offset);
     return true;
 }
 
@@ -4645,34 +4673,34 @@ struct testcase testcases[] = {
     // TESTCASE_PLAIN("config_parser", test_config_parser),
     /* The following tests all run towards the same server */
     // TESTCASE_SETUP("start_server", start_memcached_server),
-//     TESTCASE_PLAIN_AND_SSL("connect", test_connect_to_server),
-//     TESTCASE_PLAIN_AND_SSL("noop", test_noop),
-//     TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
-//     TESTCASE_PLAIN_AND_SSL("sasl fail", test_sasl_fail),
-//     TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
-//     TESTCASE_PLAIN_AND_SSL("quit", test_quit),
-//     TESTCASE_PLAIN_AND_SSL("quitq", test_quitq),
-//     TESTCASE_PLAIN_AND_SSL("set", test_set),
-//     TESTCASE_PLAIN_AND_SSL("setq", test_setq),
-//     TESTCASE_PLAIN_AND_SSL("add", test_add),
-//     TESTCASE_PLAIN_AND_SSL("addq", test_addq),
-//     TESTCASE_PLAIN_AND_SSL("replace", test_replace),
-//     TESTCASE_PLAIN_AND_SSL("replaceq", test_replaceq),
-//     TESTCASE_PLAIN_AND_SSL("delete", test_delete),
-//     TESTCASE_PLAIN_AND_SSL("delete_cas", test_delete_cas),
-//     TESTCASE_PLAIN_AND_SSL("delete_bad_cas", test_delete_bad_cas),
-//     TESTCASE_PLAIN_AND_SSL("deleteq", test_deleteq),
-//     TESTCASE_PLAIN_AND_SSL("delete_mutation_seqno", test_delete_mutation_seqno),
-//     TESTCASE_PLAIN_AND_SSL("get", test_get),
-//     TESTCASE_PLAIN_AND_SSL("getq", test_getq),
-//     TESTCASE_PLAIN_AND_SSL("getk", test_getk),
-//     TESTCASE_PLAIN_AND_SSL("getkq", test_getkq),
-//     TESTCASE_PLAIN_AND_SSL("incr", test_incr),
-//     TESTCASE_PLAIN_AND_SSL("incrq", test_incrq),
-//     TESTCASE_PLAIN_AND_SSL("decr", test_decr),
-//     TESTCASE_PLAIN_AND_SSL("decrq", test_decrq),
-//     TESTCASE_PLAIN_AND_SSL("incr_invalid_cas", test_invalid_cas_incr),
-//     TESTCASE_PLAIN_AND_SSL("incrq_invalid_cas", test_invalid_cas_incrq),
+    // TESTCASE_PLAIN_AND_SSL("connect", test_connect_to_server),
+    // TESTCASE_PLAIN_AND_SSL("noop", test_noop),
+    // TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
+    // TESTCASE_PLAIN_AND_SSL("sasl fail", test_sasl_fail),
+    // TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
+    // TESTCASE_PLAIN_AND_SSL("quit", test_quit),
+    // TESTCASE_PLAIN_AND_SSL("quitq", test_quitq),
+    // TESTCASE_PLAIN_AND_SSL("set", test_set),
+    // TESTCASE_PLAIN_AND_SSL("setq", test_setq),
+    // TESTCASE_PLAIN_AND_SSL("add", test_add),
+    // TESTCASE_PLAIN_AND_SSL("addq", test_addq),
+    // TESTCASE_PLAIN_AND_SSL("replace", test_replace),
+    // TESTCASE_PLAIN_AND_SSL("replaceq", test_replaceq),
+    // TESTCASE_PLAIN_AND_SSL("delete", test_delete),
+    // TESTCASE_PLAIN_AND_SSL("delete_cas", test_delete_cas),
+    // TESTCASE_PLAIN_AND_SSL("delete_bad_cas", test_delete_bad_cas),
+    // TESTCASE_PLAIN_AND_SSL("deleteq", test_deleteq),
+    // TESTCASE_PLAIN_AND_SSL("delete_mutation_seqno", test_delete_mutation_seqno),
+    // TESTCASE_PLAIN_AND_SSL("get", test_get),
+    // TESTCASE_PLAIN_AND_SSL("getq", test_getq),
+    // TESTCASE_PLAIN_AND_SSL("getk", test_getk),
+    // TESTCASE_PLAIN_AND_SSL("getkq", test_getkq),
+    // TESTCASE_PLAIN_AND_SSL("incr", test_incr),
+    // TESTCASE_PLAIN_AND_SSL("incrq", test_incrq),
+    // TESTCASE_PLAIN_AND_SSL("decr", test_decr),
+    // TESTCASE_PLAIN_AND_SSL("decrq", test_decrq),
+    // TESTCASE_PLAIN_AND_SSL("incr_invalid_cas", test_invalid_cas_incr),
+    // TESTCASE_PLAIN_AND_SSL("incrq_invalid_cas", test_invalid_cas_incrq),
 //     TESTCASE_PLAIN_AND_SSL("decr_invalid_cas", test_invalid_cas_decr),
 //     TESTCASE_PLAIN_AND_SSL("decrq_invalid_cas", test_invalid_cas_decrq),
 //     TESTCASE_PLAIN_AND_SSL("incr_mutation_seqno", test_incr_mutation_seqno),
@@ -4735,7 +4763,8 @@ struct testcase testcases[] = {
     // TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
     // TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
     // TESTCASE_PLAIN_AND_SSL("will_it_blend", test_stat),
-    TESTCASE_PLAIN("topkeys", test_topkeys),
+    TESTCASE_PLAIN("bucket", create_bucket),
+    // TESTCASE_PLAIN("topkeys", test_topkeys),
     TESTCASE_CLEANUP("stop_bucket_server", stop_memcached_server),
     TESTCASE_PLAIN(NULL, NULL)
 };
