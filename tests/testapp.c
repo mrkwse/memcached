@@ -77,6 +77,7 @@ static BIO *ssl_bio_r = NULL;
 static BIO *ssl_bio_w = NULL;
 
 static void set_mutation_seqno_feature(bool enable);
+static uint16_t sasl_auth(const char *username, const char *password);
 
 /* Returns true if the specified test phase is enabled. */
 static bool phase_enabled(int phase) {
@@ -2452,35 +2453,66 @@ static bool create_bucket() {
     //                       buf, strlen(path) + strlen(args) + 1, 0);
 
     union {
-        protocol_binary_request_create_bucket request;
-        protocol_binary_response_no_extras response;
-        char bytes[2048];
-    } buffer;
+        protocol_binary_request_create_bucket req;
+        char buffer[1024];
+    } request;
+
+    // union {
+    //     protocol_binary_request_create_bucket request;
+    //     protocol_binary_response_no_extras response;
+    //     char bytes[2048];
+    // } buffer;
 
     char *name = "top_test";
-    char *type = "couchase";
-    char *config = "config='ramQuotaMB=128&authType=sasl'";
+    // char *type = "membase";
+    char *engine[1024];
+    get_working_current_directory(engine, 256);
+    strncat(engine, "/ep.so", 256); // TODO: needs generalising to ../ep-engine/ep.so
+                                    //       or install/....
+    //vvv snprintf vvv
+    printf("%s\n", engine);
 
-    buffer.request.message.header.request.magic = PROTOCOL_BINARY_REQ;
-    buffer.request.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+    char *config[1024];
 
-    size_t offset = sizeof(buffer.bytes);
+    snprintf(config, sizeof(config), "ht_locks=5;tap_noop_interval=2;"
+            "max_size=268435456;tap_keepalive=300;"
+            "allow_data_loss_during_shutdown=true;backend=couchdb;"
+            "couchbucket=%s;max_vbuckets=1024;data_traffic_enabled=false;"
+            "max_num_workers=3;item_eviction_policy=value_only;"
+            "failpartialwarmup=false", name);
+
+    strncat(engine, config, 1024);
+
+    //
+    printf(">>> %s <<<\n", engine);
+    request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
+    request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+
+    //
+    size_t offset = sizeof(request.req.bytes);
     size_t len = strlen(name);
-    memcpy(buffer.bytes + offset, name, len);
+    memcpy(request.buffer + offset, name, len);
     offset += len;
 
-    buffer.request.message.header.request.keylen = htons((uint16_t)(offset -
-                                                              sizeof(buffer.bytes)));
+    //
+    request.req.message.header.request.keylen = htons((uint16_t)(offset -
+                                                       sizeof(request.buffer)));
 
-    len = strlen(type);
-    memcpy(buffer.bytes + offset, type, len);
-    offset += len + 1;
+    // len = strlen(e);
+    // memcpy(buffer.bytes + offset, type, len);
+    // offset += len + 1;
 
-    len = strlen(config);
-    memcpy(buffer.bytes + offset, config, len);
+    len = strlen(engine);
+    memcpy(request.buffer + offset, engine, len);
     offset += len;
-    buffer.request.message.header.request.bodylen = htonl((uint32_t)(offset -
-                                    sizeof(buffer.bytes)));
+    request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
+                                    sizeof(request.buffer)));
+
+    // len = strlen(request_string);
+    // memcpy(buffer.bytes + offset, request_string, len);
+    // offset += len;
+    // buffer.request.message.header.request.bodylen = htonl((uint32_t)(offset -
+    //                                 sizeof(buffer.bytes)));
 
     // char buf[1024];
     // //
@@ -2501,16 +2533,21 @@ static bool create_bucket() {
     //                         //  strlen(args) + 1);
 
     // if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-        safe_send(buffer.bytes, (int)offset, false);
+    sasl_auth("_admin", "password");
+    safe_send(request.buffer, (int)offset, false);
     // }
 
+    union {
+        protocol_binary_response_no_extras res;
+        char buffer[1024];
+    } response;
 
     do {
-        safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-        validate_response_header(&buffer.response,
+        safe_recv_packet(response.buffer, sizeof(response.buffer));
+        validate_response_header(&response.res,
                                  PROTOCOL_BINARY_CMD_CREATE_BUCKET,
                                  PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    } while (buffer.response.message.header.response.keylen != 0);
+    } while (response.res.message.header.response.keylen != 0);
 
     return true;
 }
