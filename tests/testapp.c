@@ -429,6 +429,7 @@ static cJSON *generate_config(const char *engine)
     strncat(cert_path, CERTIFICATE_PATH(testapp.cert), 256);
 
     cJSON_AddStringToObject(obj, "module", engine);
+    cJSON_AddStringToObject(obj, "config", "auto_create=false");
     cJSON_AddItemReferenceToObject(root, "engine", obj);
 
     // obj = cJSON_CreateObject();
@@ -471,7 +472,7 @@ static cJSON *generate_config(const char *engine)
     cJSON_AddStringToObject(root, "admin", "");     //TODO may need changing for bucket auth
     cJSON_AddTrueToObject(root, "datatype_support");
     cJSON_AddStringToObject(root, "rbac_file", rbac_path);
-    // cJSON_AddNumberToObject(root, "verbosity", 2);
+    cJSON_AddNumberToObject(root, "verbosity", 2);
 
     return root;
 }
@@ -1379,7 +1380,7 @@ static bool safe_recv_packet(void *buf, size_t size) {
 
     return true;
 }
-
+//!!
 static off_t storage_command(char*buf,
                              size_t bufsz,
                              uint8_t cmd,
@@ -2440,112 +2441,120 @@ static enum test_return test_stat_connections(void) {
     return TEST_PASS;
 }
 
+static off_t create_bucket_packet(char *buf,
+                                  size_t bufsz,
+                                  const void* key,
+                                  const size_t key_len,
+                                  const void* dta,
+                                  const size_t dta_len) {
+
+    protocol_binary_request_no_extras *request = (void*)buf;
+
+    memset(request->bytes, 0, sizeof(request));
+    request->message.header.request.magic = PROTOCOL_BINARY_REQ;
+    request->message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+    request->message.header.request.keylen = htons((uint16_t)key_len);
+    request->message.header.request.extlen = 0; //check
+    request->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+    request->message.header.request.vbucket = 0x0000;
+    request->message.header.request.bodylen = htonl((uint32_t)(key_len + 0 + dta_len));
+    request->message.header.request.opaque = 0xdeadbeef;
+    request->message.header.request.cas = 0x0000000000000000;
+
+    off_t key_offset = sizeof(protocol_binary_request_create_bucket) +
+            request->message.header.request.extlen;
+
+    if (key != NULL) {
+        memcpy(buf + key_offset, key, key_len);
+    }
+    if (dta != NULL) {
+        memcpy(buf + key_offset + key_len, dta, dta_len);
+    }
+
+    return (off_t)(sizeof(*request) + key_len + dta_len + request->message.header.request.extlen);
+
+}
+//
+// if ((len + offset) < buffersize) {
+//     memcpy(((char*)buffer) + offset, command.bytes, len);
+//     offset += (off_t)len;
+// } else {
+//     break;
+// }
+
 static bool create_bucket() {
-    // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
-    // union {
-    //     protocol_binary_request_no_extras request;
-    //     protocol_binary_response_no_extras response;
-    //     char bytes[2048];
-    // } buffer;
-
-
-    // return create_packet4(PROTOCOL_BINARY_CMD_CREATE_BUCKET, user,
-    //                       buf, strlen(path) + strlen(args) + 1, 0);
 
     union {
         protocol_binary_request_create_bucket req;
         char buffer[1024];
     } request;
 
-    // char test_packet[1024];
-
-    // union {
-    //     protocol_binary_request_create_bucket request;
-    //     protocol_binary_response_no_extras response;
-    //     char bytes[2048];
-    // } buffer;
-
-    char *name = "top_test";
-    // char *type = "membase";
-    char *engine = "/usr/Developer/Projects/couchbase/build/ep-engine/ep.so";
-    char *args[1024];
+    char *name = "hereherehere";
+    // char *type = "memcached";
+    char *engine = DEFAULT_ENGINE;
+    // char *engine = "/Users/mwuk/Developer/Projects/couchbase/install/lib/memcached/default_engine.so";
+    char args[1024];
     // get_working_current_directory(engine, 256);
     // strncat(engine, "/ep.so", 256); // TODO: needs generalising to ../ep-engine/ep.so
                                     //       or install/....
-    //vvv snprintf vvv
-    printf("%s\n", engine);
 
-    // snprintf(test_packet, sizeof(test_packet), "%s%c%s")
+    // printf("%s\n", engine);
 
 
-
-    char *config[1024];
+    char config[1024];
 
 
 
-    snprintf(config, sizeof(config), "ht_size=3079;ht_locks=5;tap_noop_interval=2;"
-            "max_size=268435456;tap_keepalive=300;dbname=/usr/Developer/Projects/couchbase/ns_server/data/n_0/data/%s;"
-            "allow_data_loss_during_shutdown=true;backend=couchdb;"
-            "couchbucket=%s;max_vbuckets=1024;data_traffic_enabled=false;"
-            "max_num_workers=3;item_eviction_policy=value_only;"
-            "failpartialwarmup=false", name, name);
+    snprintf(config, sizeof(config), "cache_size=1293942784;"
+                                     "uuid=6a43611b1af03543f7e320db3e209a57;"
+                                     "vb0=true;");
+
+    // snprintf(config, sizeof(config), "ht_size=3079;ht_locks=5;tap_noop_interval=2;"
+    //         "max_size=268435456;tap_keepalive=300;dbname=/usr/Developer/Projects/couchbase/ns_server/data/n_0/data/%s;"
+    //         "allow_data_loss_during_shutdown=true;backend=couchdb;"
+    //         "couchbucket=%s;max_vbuckets=1024;data_traffic_enabled=false;"
+    //         "max_num_workers=3;item_eviction_policy=value_only;"
+    //         "failpartialwarmup=false", name, name);
 
     printf("%s\n", config);
 
-    snprintf(args, sizeof(args), "%s%c%s", engine, config);
+    const size_t val_len = snprintf(args, sizeof(args), "%s%c%s", engine, 0x00, config);
+
+    printf("Value Length: %zd\n", val_len);
+    // // Set header to
+    // printf(">>> %s <<<\n", args);
+    // request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
+    // request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
 
     //
-    printf(">>> %s <<<\n", args);
-    request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
-    request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
 
-    //
-    size_t offset = sizeof(request.req.bytes);
-    size_t len = strlen(name);
-    memcpy(request.buffer + offset, name, len);
-    offset += len;
+    printf("%s\n", args);
 
-    //
-    request.req.message.header.request.keylen = htons((uint16_t)(offset -
-                                                       sizeof(request.buffer)));
-
-    // len = strlen(e);
-    // memcpy(buffer.bytes + offset, type, len);
-    // offset += len + 1;
-
-    len = strlen(args);
-    memcpy(request.buffer + offset, args, len);
-    offset += len;
-    request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
-                                    sizeof(request.buffer)));
-
-    // len = strlen(request_string);
-    // memcpy(buffer.bytes + offset, request_string, len);
+    // const size_t header_len = sizeof(requst.req.bytes);
+    // size_t offset = header_len;
+    const size_t key_len = strlen(name);
+    // memcpy(request.buffer + offset, name, len);
     // offset += len;
-    // buffer.request.message.header.request.bodylen = htonl((uint32_t)(offset -
-    //                                 sizeof(buffer.bytes)));
 
-    // char buf[1024];
-    // //
-    // char *user = "_admin";
-    // char *path = "/usr/Developer/Projects/couchbase/install/lib/memcached/ep.so"; /* = ENGINE_PATH*/ //FIXME: Windows
-    // char *args = "name=default&ramQuotaMB=128&authType=sasl";
+
+    printf("Total body length: %zd\n", val_len + key_len);
+
     //
-    // snprintf(buf, sizeof(buf), "%s%c%s", path, 0, args);
-    //
-    // //
-    // size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-    //                          PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-    //                          user, strlen(user), buf, strlen(path) + strlen(args) + 1);
-    //                         //  NULL, 0, NULL, 0);
-    //                         //  user, strlen(user), buf,
-    //                         //  strlen(buf);
-    //                         //  strlen(path) +
-    //                         //  strlen(args) + 1);
+    // request.req.message.header.request.keylen = htons((uint16_t)len);
+
+    // const size_t val_len = strlen(args);
+    // memcpy(request.buffer + offset, args, len);
+    // offset += len;
+    // request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
+    //                                 header_len));
+
+    size_t len = create_bucket_packet(request.buffer, sizeof(request.buffer),
+                                      name, key_len, args,
+                                      val_len);
 
     if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
     // sasl_auth("_admin", "password");
-        safe_send(request.buffer, (int)offset, false);
+        safe_send(request.buffer, len, false);
     }
 
     union {
@@ -2553,69 +2562,69 @@ static bool create_bucket() {
         char buffer[1024];
     } response;
 
-    do {
+    // do {
         safe_recv_packet(response.buffer, sizeof(response.buffer));
         validate_response_header(&response.res,
                                  PROTOCOL_BINARY_CMD_CREATE_BUCKET,
                                  PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    } while (response.res.message.header.response.keylen != 0);
+    // } while (response.res.message.header.response.keylen != 0);
 
     return true;
 }
 
 static bool nnn_create_bucket() {
-
-    char test_packet[1024];
-
-    char *name = "top_test";
-    // char *type = "membase";
-    char *engine = "/usr/Developer/Projects/couchbase/build/ep-engine/ep.so.";
-    char *config[1024];
-
-    snprintf(config, sizeof(config), "ht_locks=5;tap_noop_interval=2;"
-            "max_size=268435456;tap_keepalive=300;"
-            "allow_data_loss_during_shutdown=true;backend=couchdb;"
-            "couchbucket=%s;max_vbuckets=1024;data_traffic_enabled=false;"
-            "max_num_workers=3;item_eviction_policy=value_only;"
-            "failpartialwarmup=false", name);
-
-    snprintf(test_packet, sizeof(test_packet), "%s%c%s", engine, 0, config);
-
-    uint8_t opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
-    const char *key = "_user";
-    const char *val = test_packet;
-    size_t vlen = strlen(engine) + strlen(config) + 1;
-    uint64_t cas = 0;
-
-    void *pkt_raw = calloc(1, sizeof(protocol_binary_request_header)
-                            + strlen(key) + vlen);
-    protocol_binary_request_header *req = (protocol_binary_request_header*)pkt_raw;
-    cb_assert(pkt_raw);
-    req->request.opcode = opcode;
-    req->request.bodylen = htonl((uint32_t)(strlen(key) + vlen));
-    req->request.keylen = htons((uint16_t)strlen(key));
-    req->request.cas = htonll(cas);
-    memcpy((char*)pkt_raw + sizeof(protocol_binary_request_header),
-            key, strlen(key));
-    memcpy((char*)pkt_raw + sizeof(protocol_binary_request_header) + strlen(key),
-            val, vlen);
-
-    if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-    // sasl_auth("_admin", "password");
-        safe_send(pkt_raw, (int)(sizeof(protocol_binary_request_header) + strlen(key)), false);
-    }
-
-    union {
-        protocol_binary_response_no_extras res;
-        char buffer[1024];
-    } response;
-
-    do {
-        safe_recv_packet(response.buffer, sizeof(response.buffer));
-        validate_response_header(&response.res,
-                                 PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-                                 PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    } while (response.res.message.header.response.keylen != 0);
+    //
+    // char test_packet[1024];
+    //
+    // char *name = "top_test";
+    // // char *type = "membase";
+    // char *engine = "/usr/Developer/Projects/couchbase/build/ep-engine/ep.so.";
+    // char *config[1024];
+    //
+    // snprintf(config, sizeof(config), "ht_locks=5;tap_noop_interval=2;"
+    //         "max_size=268435456;tap_keepalive=300;"
+    //         "allow_data_loss_during_shutdown=true;backend=couchdb;"
+    //         "couchbucket=%s;max_vbuckets=1024;data_traffic_enabled=false;"
+    //         "max_num_workers=3;item_eviction_policy=value_only;"
+    //         "failpartialwarmup=false", name);
+    //
+    // snprintf(test_packet, sizeof(test_packet), "%s%c%s", engine, 0, config);
+    //
+    // uint8_t opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+    // const char *key = "_user";
+    // const char *val = test_packet;
+    // size_t vlen = strlen(engine) + strlen(config) + 1;
+    // uint64_t cas = 0;
+    //
+    // void *pkt_raw = calloc(1, sizeof(protocol_binary_request_header)
+    //                         + strlen(key) + vlen);
+    // protocol_binary_request_header *req = (protocol_binary_request_header*)pkt_raw;
+    // cb_assert(pkt_raw);
+    // req->request.opcode = opcode;
+    // req->request.bodylen = htonl((uint32_t)(strlen(key) + vlen));
+    // req->request.keylen = htons((uint16_t)strlen(key));
+    // req->request.cas = htonll(cas);
+    // memcpy((char*)pkt_raw + sizeof(protocol_binary_request_header),
+    //         key, strlen(key));
+    // memcpy((char*)pkt_raw + sizeof(protocol_binary_request_header) + strlen(key),
+    //         val, vlen);
+    //
+    // if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+    // // sasl_auth("_admin", "password");
+    //     safe_send(pkt_raw, (int)(sizeof(protocol_binary_request_header) + strlen(key)), false);
+    // }
+    //
+    // union {
+    //     protocol_binary_response_no_extras res;
+    //     char buffer[1024];
+    // } response;
+    //
+    // do {
+    //     safe_recv_packet(response.buffer, sizeof(response.buffer));
+    //     validate_response_header(&response.res,
+    //                              PROTOCOL_BINARY_CMD_CREATE_BUCKET,
+    //                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
+    // } while (response.res.message.header.response.keylen != 0);
 
     return true;
 }
@@ -2655,7 +2664,7 @@ static enum test_return test_topkeys(void) {
     //     return TEST_FAIL;
     // }
     //
-    propagate_bucket(52);
+    // propagate_bucket(52);
 
 
     // test_get_impl("samplekey", PROTOCOL_BINARY_CMD_GET); // FIXME SOMEHOW
