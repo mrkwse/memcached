@@ -641,15 +641,11 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
         argv[arg++] = "./memcached";
         argv[arg++] = "-C";
         argv[arg++] = (char*)config_file;
-
         argv[arg++] = NULL;
-       	getchar();
-	cb_assert(execvp(argv[0], argv) != -1);
-        printf("Child pid:%i", pid);
+    	cb_assert(execvp(argv[0], argv) != -1);
     }
 #endif // !WIN32
 
-    printf("Parent pid:%i", pid);
 
     // printf("busy-wait\n");
     /* Yeah just let us "busy-wait" for the file to be created ;-) */
@@ -686,8 +682,6 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
 #ifdef WIN32
     return pinfo.hProcess;
 #else
-    printf("Parent pid:%i", pid);
-    getchar();
     return pid;
 #endif
 }
@@ -1153,11 +1147,6 @@ static enum test_return stop_memcached_server(void) {
     isasl_file = NULL;
     remove(rbac_file);
 
-    printf("squawk\n");
-    // printf(rbac_file);
-
-
-
     return TEST_PASS;
 }
 
@@ -1168,24 +1157,19 @@ static enum test_return start_bucket_server(void) {
     // char config_file[] = "memcached_testapp.json.XXXXXX";
     // char rbac_file[] = "testapp_rbac.json.XXXXXX";  //TODO check scope
 
-    printf("buckets!\n");
     cJSON *rbac = generate_rbac_config();
     // printf("rbacconf\n");
     char *rbac_text = cJSON_Print(rbac);
-    printf(" >> %s <<\n", rbac_file);
     if (cb_mktemp(rbac_file) == NULL) {
         return TEST_FAIL;
     }
-    printf("cb_mktemp pass\n");
     if (write_config_to_file(rbac_text, rbac_file) == -1) {
         return TEST_FAIL;
     }
-    printf("if\n");
     cJSON_Free(rbac_text);
     cJSON_Delete(rbac);
 
     json_config = generate_config(BUCKET_ENGINE);
-    printf("new config!\n");
     config_string = cJSON_Print(json_config);
     if (cb_mktemp(config_file) == NULL) {
         return TEST_FAIL;
@@ -1193,7 +1177,6 @@ static enum test_return start_bucket_server(void) {
     if (write_config_to_file(config_string, config_file) == -1) {
         return TEST_FAIL;
     }
-    printf("config file\n");
 
     char fname[1024];
     snprintf(fname, sizeof(fname), "isasl.%lu.%lu.pw",
@@ -1210,10 +1193,6 @@ static enum test_return start_bucket_server(void) {
     snprintf(env, sizeof(env), "ISASL_PWFILE=%s", isasl_file);
     putenv(strdup(env));
 
-    printf(config_file);
-    printf(rbac_file);
-    printf(isasl_file);
-    printf("\nStarting server\n");
     server_start_time = time(0);
     server_pid = start_server(&port, &ssl_port, false, 600);
     return TEST_PASS;
@@ -2474,13 +2453,6 @@ static off_t create_bucket_packet(char *buf,
     return (off_t)(sizeof(*request) + key_len + dta_len + request->message.header.request.extlen);
 
 }
-//
-// if ((len + offset) < buffersize) {
-//     memcpy(((char*)buffer) + offset, command.bytes, len);
-//     offset += (off_t)len;
-// } else {
-//     break;
-// }
 
 static bool create_bucket() {
 
@@ -2489,18 +2461,9 @@ static bool create_bucket() {
         char buffer[1024];
     } request;
 
-    char *name = "hereherehere";
-    // char *type = "memcached";
+    char *name = "test_bucket";
     char *engine = DEFAULT_ENGINE;
-    // char *engine = "/Users/mwuk/Developer/Projects/couchbase/install/lib/memcached/default_engine.so";
     char args[1024];
-    // get_working_current_directory(engine, 256);
-    // strncat(engine, "/ep.so", 256); // TODO: needs generalising to ../ep-engine/ep.so
-                                    //       or install/....
-
-    // printf("%s\n", engine);
-
-
     char config[1024];
 
 
@@ -2509,51 +2472,15 @@ static bool create_bucket() {
                                      "uuid=6a43611b1af03543f7e320db3e209a57;"
                                      "vb0=true;");
 
-    // snprintf(config, sizeof(config), "ht_size=3079;ht_locks=5;tap_noop_interval=2;"
-    //         "max_size=268435456;tap_keepalive=300;dbname=/usr/Developer/Projects/couchbase/ns_server/data/n_0/data/%s;"
-    //         "allow_data_loss_during_shutdown=true;backend=couchdb;"
-    //         "couchbucket=%s;max_vbuckets=1024;data_traffic_enabled=false;"
-    //         "max_num_workers=3;item_eviction_policy=value_only;"
-    //         "failpartialwarmup=false", name, name);
-
-    printf("%s\n", config);
-
     const size_t val_len = snprintf(args, sizeof(args), "%s%c%s", engine, 0x00, config);
 
-    printf("Value Length: %zd\n", val_len);
-    // // Set header to
-    // printf(">>> %s <<<\n", args);
-    // request.req.message.header.request.magic = PROTOCOL_BINARY_REQ;
-    // request.req.message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
-
-    //
-
-    printf("%s\n", args);
-
-    // const size_t header_len = sizeof(requst.req.bytes);
-    // size_t offset = header_len;
     const size_t key_len = strlen(name);
-    // memcpy(request.buffer + offset, name, len);
-    // offset += len;
-
-
-    printf("Total body length: %zd\n", val_len + key_len);
-
-    //
-    // request.req.message.header.request.keylen = htons((uint16_t)len);
-
-    // const size_t val_len = strlen(args);
-    // memcpy(request.buffer + offset, args, len);
-    // offset += len;
-    // request.req.message.header.request.bodylen = htonl((uint32_t)(offset -
-    //                                 header_len));
 
     size_t len = create_bucket_packet(request.buffer, sizeof(request.buffer),
                                       name, key_len, args,
                                       val_len);
 
     if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-    // sasl_auth("_admin", "password");
         safe_send(request.buffer, len, false);
     }
 
@@ -2562,76 +2489,18 @@ static bool create_bucket() {
         char buffer[1024];
     } response;
 
-    // do {
-        safe_recv_packet(response.buffer, sizeof(response.buffer));
-        validate_response_header(&response.res,
-                                 PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-                                 PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    // } while (response.res.message.header.response.keylen != 0);
-
-    return true;
-}
-
-static bool nnn_create_bucket() {
-    //
-    // char test_packet[1024];
-    //
-    // char *name = "top_test";
-    // // char *type = "membase";
-    // char *engine = "/usr/Developer/Projects/couchbase/build/ep-engine/ep.so.";
-    // char *config[1024];
-    //
-    // snprintf(config, sizeof(config), "ht_locks=5;tap_noop_interval=2;"
-    //         "max_size=268435456;tap_keepalive=300;"
-    //         "allow_data_loss_during_shutdown=true;backend=couchdb;"
-    //         "couchbucket=%s;max_vbuckets=1024;data_traffic_enabled=false;"
-    //         "max_num_workers=3;item_eviction_policy=value_only;"
-    //         "failpartialwarmup=false", name);
-    //
-    // snprintf(test_packet, sizeof(test_packet), "%s%c%s", engine, 0, config);
-    //
-    // uint8_t opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
-    // const char *key = "_user";
-    // const char *val = test_packet;
-    // size_t vlen = strlen(engine) + strlen(config) + 1;
-    // uint64_t cas = 0;
-    //
-    // void *pkt_raw = calloc(1, sizeof(protocol_binary_request_header)
-    //                         + strlen(key) + vlen);
-    // protocol_binary_request_header *req = (protocol_binary_request_header*)pkt_raw;
-    // cb_assert(pkt_raw);
-    // req->request.opcode = opcode;
-    // req->request.bodylen = htonl((uint32_t)(strlen(key) + vlen));
-    // req->request.keylen = htons((uint16_t)strlen(key));
-    // req->request.cas = htonll(cas);
-    // memcpy((char*)pkt_raw + sizeof(protocol_binary_request_header),
-    //         key, strlen(key));
-    // memcpy((char*)pkt_raw + sizeof(protocol_binary_request_header) + strlen(key),
-    //         val, vlen);
-    //
-    // if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-    // // sasl_auth("_admin", "password");
-    //     safe_send(pkt_raw, (int)(sizeof(protocol_binary_request_header) + strlen(key)), false);
-    // }
-    //
-    // union {
-    //     protocol_binary_response_no_extras res;
-    //     char buffer[1024];
-    // } response;
-    //
-    // do {
-    //     safe_recv_packet(response.buffer, sizeof(response.buffer));
-    //     validate_response_header(&response.res,
-    //                              PROTOCOL_BINARY_CMD_CREATE_BUCKET,
-    //                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    // } while (response.res.message.header.response.keylen != 0);
+    safe_recv_packet(response.buffer, sizeof(response.buffer));
+    validate_response_header(&response.res,
+                             PROTOCOL_BINARY_CMD_CREATE_BUCKET,
+                             PROTOCOL_BINARY_RESPONSE_SUCCESS);
 
     return true;
 }
 
 static bool propagate_bucket(int count) {
-    int ii, opcode;
+    int ii, opcode, sasl_fail_count;
     size_t len;
+
 
     union {
         protocol_binary_request_no_extras request;
@@ -2640,11 +2509,29 @@ static bool propagate_bucket(int count) {
     } buffer;
 
     for (ii = 0; ii < count; ii++) {
-        opcode = (ii % (0xff - 0x90)) + 0x90;
-        len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-                          opcode, "somekey", 7, "someval", 7);
+        // opcode = (ii % (0xff - 0x90)) + 0x90;
+        // len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+        //                   /*opcode*/ PROTOCOL_BINARY_CMD_SET, "somekey", 7, "someval", 7);
 
-        safe_send(buffer.bytes, len, false);
+        len = storage_command(buffer.bytes, sizeof(buffer.bytes),
+                              PROTOCOL_BINARY_CMD_SET, "somekey", 7,
+                              "someval", 7, 0, 0);
+
+        if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+            printf("SASL success");
+            safe_send(buffer.bytes, len, false);
+
+            safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+            validate_response_header(&buffer.response, /*opcode*/ PROTOCOL_BINARY_CMD_SET,
+                                     PROTOCOL_BINARY_RESPONSE_SUCCESS);
+            // sasl_fail_count = 0;
+         } else {
+             ii--;
+            //  sasl_fail_count++;
+            //  if (sasl_fail_count > 7) {
+            //      return false;
+            //  }
+         }
     }
 
     return true;
@@ -2658,42 +2545,40 @@ static enum test_return test_topkeys(void) {
 
 
     int sum = 42;
+
     // if (create_bucket()) {
-    //     return TEST_PASS;
-    // } else {
-    //     return TEST_FAIL;
-    // }
-    //
-    // propagate_bucket(52);
+    if (test_set_impl("key", PROTOCOL_BINARY_CMD_SET) == TEST_PASS) {
+        printf("SUCCESS BUCKET\n");
 
 
-    // test_get_impl("samplekey", PROTOCOL_BINARY_CMD_GET); // FIXME SOMEHOW
-    // test_getq_impl("samplekey", PROTOCOL_BINARY_CMD_GETQ);
+        if (propagate_bucket(sum) == true) {
 
-    if (create_bucket()) {
 
-        propagate_bucket(sum);
+            union {
+                protocol_binary_request_no_extras request;
+                protocol_binary_response_no_extras response;
+                char bytes[2048];
+            } buffer;
 
-        union {
-            protocol_binary_request_no_extras request;
-            protocol_binary_response_no_extras response;
-            char bytes[2048];
-        } buffer;
+            if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_AUTH_CONTINUE) {
+                size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                                         PROTOCOL_BINARY_CMD_STAT,
+                                         "topkeys_json", strlen("topkeys_json"), NULL, 0);
 
-        size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-                                 PROTOCOL_BINARY_CMD_STAT,
-                                 "topkeys_json", strlen("topkeys_json"), NULL, 0);
+                safe_send(buffer.bytes, len, false);
+            }
 
-        safe_send(buffer.bytes, len, false);
-        do {
-            safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-            validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
-                                     PROTOCOL_BINARY_RESPONSE_SUCCESS);
-            // printf("\n%s\n", buffer.response.message.header.response.status);
-        } while (buffer.response.message.header.response.keylen != 0);
+            do {
+                safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));   // SIGABRT
+                validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
+                                         PROTOCOL_BINARY_RESPONSE_SUCCESS);
+                // printf("\n%s\n", buffer.response.message.header.response.status);
+            } while (buffer.response.message.header.response.keylen != 0);
 
-        // cb_assert(strstr(buffer.response.message.body, "\"access_count\":42"));
-
+            // cb_assert(strstr(buffer.response.message.body, "\"access_count\":42"));
+        } else {
+            return TEST_FAIL;
+        }
     } else {
 
         return TEST_FAIL;
@@ -4618,10 +4503,7 @@ static uint16_t sasl_auth(const char *username, const char *password) {
                            PROTOCOL_BINARY_CMD_SASL_STEP,
                            chosenmech, strlen(chosenmech), data, len);
 
-        safe_send(buffer.bytes, plen, false);       //FIXME: RETURNS Could not
-                                                    // find the function to create
-                                                    // engine in self: ./memcached:
-                                                    // undefined symbol: create_ep_engine_instance
+        safe_send(buffer.bytes, plen, false);
 
         safe_recv_packet(&buffer, sizeof(buffer));
     }
@@ -4819,9 +4701,6 @@ struct testcase testcases[] = {
     TESTCASE_SETUP("start_bucket_server", start_bucket_server),
     // TESTCASE_SETUP("start_default_server", start_memcached_server),
     TESTCASE_PLAIN("connect", test_connect_to_server),
-    TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
-    TESTCASE_PLAIN_AND_SSL("sasl success", test_sasl_success),
-    TESTCASE_PLAIN_AND_SSL("will_it_blend", test_stat),
     TESTCASE_PLAIN("bucket", create_bucket),
     TESTCASE_PLAIN("topkeys", test_topkeys),
     TESTCASE_CLEANUP("stop_bucket_server", stop_memcached_server),

@@ -1,0 +1,82 @@
+default/Users/mwuk/Developer/Projects/couchbase/install/lib/memcached/ep.so
+.
+ht_size=3079;ht_locks=47;tap_noop_interval=20;max_size=134217728;tap_keepalive=300;dbname=/Users/mwuk/Developer/Projects/couchbase/ns_server/data/n_0/data/default;allow_data_loss_during_shutdown=true;backend=couchdb;couch_bucket=default;max_vbuckets=1024;alog_path=/Users/mwuk/Developer/Projects/couchbase/ns_server/data/n_0/data/default/access.log;data_traffic_enabled=false;max_num_workers=3;uuid=2968947b3488896e21c461f3723a2666;item_eviction_policy=value_only;failpartialwarmup=false;
+______________________________________________max_size=128MB
+
+^^^^ Couchbase Bucket
+
+
+
+=== Memcached Bucket ===
+
+Couchbase Protocol, Create Bucket Request, Opcode: 0x85, VBucket: 0x0
+    Magic: Request (0x80)
+    Opcode: Create Bucket (0x85)
+    Key Length: 12
+    Extras Length: 0
+    Data Type: Raw bytes (0x00)
+    VBucket: 0 (0x0000)
+    [Value Length: 150]
+    Total Body Length: 162
+    Opaque: 0x00000000
+    CAS: 0x0000000000000000
+    Key: hereherehere
+    Value: /Users/mwuk/Developer/Projects/couchbase/install/lib/memcached/default_engine.so
+
+0000  02 00 00 00 45 00 00 ee e1 7e 40 00 40 06 00 00   ....E....~@.@...
+0010  7f 00 00 01 7f 00 00 01 e3 fb 2e df 1f 11 5d 61   ..............]a
+0020  cd 23 e7 8c 80 18 31 d5 fe e2 00 00 01 01 08 0a   .#....1.........
+0030  06 2d 11 13 06 2d 10 ef 80 85 00 0c 00 00 00 00   .-...-..........
+0040  00 00 00 a2 00 00 00 00 00 00 00 00 00 00 00 00   ................
+0050  68 65 72 65 68 65 72 65 68 65 72 65 2f 55 73 65   hereherehere/Use
+0060  72 73 2f 6d 77 75 6b 2f 44 65 76 65 6c 6f 70 65   rs/mwuk/Develope
+0070  72 2f 50 72 6f 6a 65 63 74 73 2f 63 6f 75 63 68   r/Projects/couch
+0080  62 61 73 65 2f 69 6e 73 74 61 6c 6c 2f 6c 69 62   base/install/lib
+0090  2f 6d 65 6d 63 61 63 68 65 64 2f 64 65 66 61 75   /memcached/defau
+00a0  6c 74 5f 65 6e 67 69 6e 65 2e 73 6f 00 63 61 63   lt_engine.so.cac
+00b0  68 65 5f 73 69 7a 65 3d 31 32 39 33 39 34 32 37   he_size=12939427
+00c0  38 34 3b 75 75 69 64 3d 36 61 34 33 36 31 31 62   84;uuid=6a43611b
+00d0  31 61 66 30 33 35 34 33 66 37 65 33 32 30 64 62   1af03543f7e320db
+00e0  33 65 32 30 39 61 35 37 3b 76 62 30 3d 74 72 75   3e209a57;vb0=tru
+00f0  65 3b                                             e;
+
+
+
+hereherehere
+/Users/mwuk/Developer/Projects/couchbase/install/lib/memcached/default_engine.so
+.
+cache_size=1293942784;uuid=6a43611b1af03543f7e320db3e209a57;vb0=true;
+		   1234MB
+
+
+
+0000  02 00 00 00 45 00 00 ed a6 67 40 00 40 06 00 00   ....E....g@.@...
+0010  7f 00 00 01 7f 00 00 01 e0 35 e0 26 b0 b5 bf 6f   .........5.&...o
+0020  17 0f 16 ec 80 18 31 d4 fe e1 00 00 01 01 08 0a   ......1.........
+0030  07 4a 54 3d 07 4a 54 3d 80 85 00 08 00 00 00 00   .JT=.JT=........
+0040  00 a1 00 00 ef be ad de 00 80 7f 0c 01 00 00 00   ................
+0050  74 6f 70 5f 74 65 73 74 2f 55 73 65 72 73 2f 6d   top_test/Users/m
+0060  77 75 6b 2f 44 65 76 65 6c 6f 70 65 72 2f 50 72   wuk/Developer/Pr
+0070  6f 6a 65 63 74 73 2f 63 6f 75 63 68 62 61 73 65   ojects/couchbase
+0080  2f 69 6e 73 74 61 6c 6c 2f 6c 69 62 2f 6d 65 6d   /install/lib/mem
+0090  63 61 63 68 65 64 2f 64 65 66 61 75 6c 74 5f 65   cached/default_e
+00a0  6e 67 69 6e 65 2e 64 79 6c 69 62 00 63 61 63 68   ngine.dylib.cach
+00b0  65 5f 73 69 7a 65 3d 31 32 39 33 39 34 32 37 38   e_size=129394278
+00c0  34 3b 75 75 69 64 3d 36 61 34 33 36 31 31 62 31   4;uuid=6a43611b1
+00d0  61 66 30 33 35 34 33 66 37 65 33 32 30 64 62 33   af03543f7e320db3
+00e0  65 32 30 39 61 35 37 3b 76 62 30 3d 74 72 75 65   e209a57;vb0=true
+00f0  3b                                                ;
+
+
+0000  02 00 00 00 45 00 00 af 5d 71 40 00 40 06 00 00   ....E...]q@.@...
+0010  7f 00 00 01 7f 00 00 01 f9 64 f9 4d 64 a4 f8 29   .........d.Md..)
+0020  1e ac 8a da 80 18 31 d4 fe a3 00 00 01 01 08 0a   ......1.........
+0030  07 d8 c6 85 07 d8 c6 85 80 85 00 0c 00 00 00 00   ................
+0040  00 63 00 00 ef be ad de 00 00 00 00 00 00 00 00   .c..............
+0050  68 65 72 65 68 65 72 65 68 65 72 65 64 65 66 61   herehereheredefa
+0060  75 6c 74 5f 65 6e 67 69 6e 65 2e 73 6f 00 63 61   ult_engine.so.ca
+0070  63 68 65 5f 73 69 7a 65 3d 31 32 39 33 39 34 32   che_size=1293942
+0080  37 38 34 3b 75 75 69 64 3d 36 61 34 33 36 31 31   784;uuid=6a43611
+0090  62 31 61 66 30 33 35 34 33 66 37 65 33 32 30 64   b1af03543f7e320d
+00a0  62 33 65 32 30 39 61 35 37 3b 76 62 30 3d 74 72   b3e209a57;vb0=tr
+00b0  75 65 3b                                          ue;

@@ -1913,7 +1913,7 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
                   memcmp("topkeys_json", stat_key, nkey) == 0) {
             cJSON *stats = cJSON_CreateObject();
 
-            printf("bucket_enigne\n");
+            printf("topkesys_json\n");
 
             if (topkeys_json_stats(peh->topkeys, stats, TK_SHARDS,
                                    get_current_time()) == 0) {
@@ -1942,7 +1942,7 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
         }
         release_engine_handle(peh);
     }
-    printf("return rc\n");
+    printf("return rc: %u\n", rc);
     return rc;
 }
 
