@@ -209,7 +209,6 @@ ENGINE_ERROR_CODE topkeys_json_stats(topkeys_t **tks, cJSON *object,
     struct tk_context context;
     size_t ii;
     cJSON *topkeys = cJSON_CreateArray();
-    // context.cookie = cookie;    //TODO: cookie to blame?? Check what bucket_testapp passed previously
     context.current_time = current_time;
     context.array = topkeys;
     for (ii = 0; ii < shards; ii++) {

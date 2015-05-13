@@ -1156,6 +1156,7 @@ static enum test_return start_bucket_server(void) {
 
     // char config_file[] = "memcached_testapp.json.XXXXXX";
     // char rbac_file[] = "testapp_rbac.json.XXXXXX";  //TODO check scope
+    putenv("MEMCACHED_TOP_KEYS=10");
 
     cJSON *rbac = generate_rbac_config();
     // printf("rbacconf\n");
@@ -1187,7 +1188,7 @@ static enum test_return start_bucket_server(void) {
 
     FILE *fp = fopen(isasl_file, "w");
     cb_assert(fp != NULL);
-    fprintf(fp, "_admin password \n");
+    fprintf(fp, "_admin password\n");
     fclose(fp);
     char env[1024];
     snprintf(env, sizeof(env), "ISASL_PWFILE=%s", isasl_file);
@@ -2454,6 +2455,23 @@ static off_t create_bucket_packet(char *buf,
 
 }
 
+static bool refresh_sasl() {
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[1024];
+    } buffer;
+
+    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                             PROTOCOL_BINARY_CMD_ISASL_REFRESH,
+                             NULL, 0, NULL, 0);
+
+    safe_send(buffer.bytes, len, false);
+    safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+
+    return true;
+}
+
 static bool create_bucket() {
 
     union {
@@ -2466,7 +2484,12 @@ static bool create_bucket() {
     char args[1024];
     char config[1024];
 
+    FILE *fp = fopen(isasl_file, "a");
+    cb_assert(fp != NULL);
+    fprintf(fp, "%s \n", name);
+    fclose(fp);
 
+    cb_assert(refresh_sasl() == true);
 
     snprintf(config, sizeof(config), "cache_size=1293942784;"
                                      "uuid=6a43611b1af03543f7e320db3e209a57;"
@@ -2494,6 +2517,7 @@ static bool create_bucket() {
                              PROTOCOL_BINARY_CMD_CREATE_BUCKET,
                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
 
+
     return true;
 }
 
@@ -2517,7 +2541,8 @@ static bool propagate_bucket(int count) {
                               PROTOCOL_BINARY_CMD_SET, "somekey", 7,
                               "someval", 7, 0, 0);
 
-        if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+        // sasl_auth("_admin", "password");
+        if (sasl_auth("test_bucket", "") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
             printf("SASL success");
             safe_send(buffer.bytes, len, false);
 
@@ -2525,8 +2550,8 @@ static bool propagate_bucket(int count) {
             validate_response_header(&buffer.response, /*opcode*/ PROTOCOL_BINARY_CMD_SET,
                                      PROTOCOL_BINARY_RESPONSE_SUCCESS);
             // sasl_fail_count = 0;
-         } else {
-             ii--;
+        //  } else {
+            //  ii--;
             //  sasl_fail_count++;
             //  if (sasl_fail_count > 7) {
             //      return false;
@@ -2537,21 +2562,17 @@ static bool propagate_bucket(int count) {
     return true;
 }
 
-static bool uncreate_bucket() {
-
-}
-
 static enum test_return test_topkeys(void) {
 
 
-    int sum = 42;
+    int sum = 5;
 
-    // if (create_bucket()) {
-    if (test_set_impl("key", PROTOCOL_BINARY_CMD_SET) == TEST_PASS) {
-        printf("SUCCESS BUCKET\n");
+    if (create_bucket()) {
+
 
 
         if (propagate_bucket(sum) == true) {
+            printf("DONE BUCKETING\n");
 
 
             union {
@@ -2560,22 +2581,24 @@ static enum test_return test_topkeys(void) {
                 char bytes[2048];
             } buffer;
 
-            if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_AUTH_CONTINUE) {
+            if (sasl_auth("test_bucket", "") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
                 size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
                                          PROTOCOL_BINARY_CMD_STAT,
                                          "topkeys_json", strlen("topkeys_json"), NULL, 0);
-
+                                        // "", strlen(""), NULL, 0);
                 safe_send(buffer.bytes, len, false);
-            }
 
+            }
             do {
                 safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));   // SIGABRT
-                validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
-                                         PROTOCOL_BINARY_RESPONSE_SUCCESS);
+                // validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
+                //                          PROTOCOL_BINARY_RESPONSE_SUCCESS);
+
                 // printf("\n%s\n", buffer.response.message.header.response.status);
             } while (buffer.response.message.header.response.keylen != 0);
-
-            // cb_assert(strstr(buffer.response.message.body, "\"access_count\":42"));
+            printf(buffer.response.bytes);
+            cb_assert(strstr(buffer.response.bytes, "\"access_count\":5"));
+            printf("\nTOPKEYS!\n");
         } else {
             return TEST_FAIL;
         }
