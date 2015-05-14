@@ -472,7 +472,7 @@ static cJSON *generate_config(const char *engine)
     cJSON_AddStringToObject(root, "admin", "");     //TODO may need changing for bucket auth
     cJSON_AddTrueToObject(root, "datatype_support");
     cJSON_AddStringToObject(root, "rbac_file", rbac_path);
-    cJSON_AddNumberToObject(root, "verbosity", 2);
+    // cJSON_AddNumberToObject(root, "verbosity", 2);
 
     return root;
 }
@@ -647,13 +647,11 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
 #endif // !WIN32
 
 
-    // printf("busy-wait\n");
-    /* Yeah just let us "busy-wait" for the file to be created ;-) */
+/* Yeah just let us "busy-wait" for the file to be created ;-) */
     while (access(filename, F_OK) == -1) {
         usleep(10);
     }
 
-    // printf("fopen\n");
     fp = fopen(filename, "r");
     if (fp == NULL) {
         fprintf(stderr, "Failed to open the file containing port numbers: %s\n",
@@ -664,7 +662,6 @@ start_server(in_port_t *port_out, in_port_t *ssl_port_out, bool daemon,
     *port_out = (in_port_t)-1;
     *ssl_port_out = (in_port_t)-1;
 
-    // printf("while\n");
     while ((fgets(buffer, sizeof(buffer), fp)) != NULL) {
         if (strncmp(buffer, "TCP INET: ", 10) == 0) {
             int32_t val;
@@ -1066,8 +1063,6 @@ static enum test_return test_config_parser(void) {
 
 static char *isasl_file;
 
-//FIXME
-
 
 //FIXME - Memcached server starts with default engine (via json_config).
 //        Restart/new top-level test?
@@ -1108,9 +1103,6 @@ static enum test_return start_memcached_server(void) {
     snprintf(env, sizeof(env), "ISASL_PWFILE=%s", isasl_file);
     putenv(strdup(env));
 
-    printf(config_file);
-    printf(rbac_file);
-    printf(isasl_file);
     server_start_time = time(0);
     server_pid = start_server(&port, &ssl_port, false, 600);
     return TEST_PASS;
@@ -1159,7 +1151,6 @@ static enum test_return start_bucket_server(void) {
     putenv("MEMCACHED_TOP_KEYS=10");
 
     cJSON *rbac = generate_rbac_config();
-    // printf("rbacconf\n");
     char *rbac_text = cJSON_Print(rbac);
     if (cb_mktemp(rbac_file) == NULL) {
         return TEST_FAIL;
@@ -2522,7 +2513,7 @@ static bool create_bucket() {
 }
 
 static bool propagate_bucket(int count) {
-    int ii, opcode, sasl_fail_count;
+    int ii;
     size_t len;
 
 
@@ -2533,46 +2524,35 @@ static bool propagate_bucket(int count) {
     } buffer;
 
     for (ii = 0; ii < count; ii++) {
-        // opcode = (ii % (0xff - 0x90)) + 0x90;
-        // len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-        //                   /*opcode*/ PROTOCOL_BINARY_CMD_SET, "somekey", 7, "someval", 7);
 
         len = storage_command(buffer.bytes, sizeof(buffer.bytes),
                               PROTOCOL_BINARY_CMD_SET, "somekey", 7,
                               "someval", 7, 0, 0);
 
-        // sasl_auth("_admin", "password");
         if (sasl_auth("test_bucket", "") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-            printf("SASL success");
             safe_send(buffer.bytes, len, false);
 
             safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-            validate_response_header(&buffer.response, /*opcode*/ PROTOCOL_BINARY_CMD_SET,
+            validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_SET,
                                      PROTOCOL_BINARY_RESPONSE_SUCCESS);
-            // sasl_fail_count = 0;
-        //  } else {
-            //  ii--;
-            //  sasl_fail_count++;
-            //  if (sasl_fail_count > 7) {
-            //      return false;
-            //  }
          }
     }
 
     return true;
 }
 
+
 static enum test_return test_topkeys(void) {
 
 
     int sum = 5;
+    char *ptr;
 
     if (create_bucket()) {
 
 
 
         if (propagate_bucket(sum) == true) {
-            printf("DONE BUCKETING\n");
 
 
             union {
@@ -2581,24 +2561,32 @@ static enum test_return test_topkeys(void) {
                 char bytes[2048];
             } buffer;
 
+            memset(buffer.bytes, 0, sizeof(buffer));
+
+
             if (sasl_auth("test_bucket", "") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
                 size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
                                          PROTOCOL_BINARY_CMD_STAT,
                                          "topkeys_json", strlen("topkeys_json"), NULL, 0);
-                                        // "", strlen(""), NULL, 0);
                 safe_send(buffer.bytes, len, false);
 
             }
-            do {
-                safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));   // SIGABRT
-                // validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
-                //                          PROTOCOL_BINARY_RESPONSE_SUCCESS);
 
-                // printf("\n%s\n", buffer.response.message.header.response.status);
-            } while (buffer.response.message.header.response.keylen != 0);
-            printf(buffer.response.bytes);
-            cb_assert(strstr(buffer.response.bytes, "\"access_count\":5"));
-            printf("\nTOPKEYS!\n");
+            safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+            validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
+                                     PROTOCOL_BINARY_RESPONSE_SUCCESS);
+
+            ptr = buffer.bytes + (sizeof(buffer.response) +
+                buffer.response.message.header.response.keylen
+                + buffer.response.message.header.response.extlen);
+
+            cJSON *topkeys = cJSON_CreateObject();
+            topkeys = cJSON_Parse(ptr);
+            cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
+                                          cJSON_GetObjectItem(topkeys, "topkeys"),
+                                          0), "access_count")->valueint == sum);
+
+            return TEST_PASS;
         } else {
             return TEST_FAIL;
         }

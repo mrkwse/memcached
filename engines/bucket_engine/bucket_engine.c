@@ -1891,8 +1891,6 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
     ENGINE_ERROR_CODE rc;
     proxied_engine_handle_t *peh;
 
-    printf("bucket_get_stats\n");
-
     /* Intercept bucket stats. */
     if (nkey == (sizeof("bucket") - 1) &&
         memcmp("bucket", stat_key, nkey) == 0) {
@@ -1902,9 +1900,7 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
     rc = ENGINE_NO_BUCKET;
     peh = get_engine_handle(handle, cookie);
 
-    // TODO: peh is null at this point in memcached_testapp. Possible misconfiguration.
     if (peh) {
-        printf("preif\n");
         if (nkey == (sizeof("topkeys") - 1) &&
             memcmp("topkeys", stat_key, nkey) == 0) {
             rc = topkeys_stats(peh->topkeys, TK_SHARDS, cookie, get_current_time(),
@@ -1913,21 +1909,17 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
                   memcmp("topkeys_json", stat_key, nkey) == 0) {
             cJSON *stats = cJSON_CreateObject();
 
-            printf("topkesys_json\n");
-
-            if (topkeys_json_stats(peh->topkeys, stats, TK_SHARDS,
-                                   get_current_time()) == 0) {
+            rc = topkeys_json_stats(peh->topkeys, stats, TK_SHARDS,
+                                   get_current_time());
+            if (rc == ENGINE_SUCCESS) {
                 char key[] = "topkeys_json";
                 char *stats_str = cJSON_PrintUnformatted(stats);
                 add_stat(key, (uint16_t)strlen(key),
                          stats_str, (uint32_t)strlen(stats_str), cookie);
                 free(stats_str);
-            } else {
-                rc = ENGINE_FAILED;
             }
             cJSON_Delete(stats);
         } else {
-            printf("final else\n");
             rc = peh->pe.v1->get_stats(peh->pe.v0, cookie, stat_key,
                                        nkey, add_stat);
             if (nkey == 0) {
@@ -1942,45 +1934,8 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
         }
         release_engine_handle(peh);
     }
-    printf("return rc: %u\n", rc);
     return rc;
 }
-
-/**
- * Alternate implementation of the "get_stats" function in engine specification,
- * exclusively for topkeys stats. As above with get_stats, however returns a
- * cJSON object rather than an ENGINE_ERROR_CODE.
- */
-// void bucket_get_stats_json(ENGINE_HANDLE* handle,
-//                            const void* cookie,
-//                            ADD_STAT add_stats) {
-//
-//     printf(handle);
-//     printf(cookie);
-//
-//     printf("\nbucket_get_stats_json\n");
-//     /* cJSON object to be returned */
-//     proxied_engine_handle_t *peh = get_engine_handle(handle, cookie);
-//
-//     printf("about to call topkeys_json_stats\n");
-//     /* Call topkeys_json_stats to populate stats cJSON object */
-//     topkeys_json_stats(peh->topkeys, TK_SHARDS, /*cookie,*/
-//                                       get_current_time());
-//
-//     release_engine_handle(peh);
-//
-//     printf("stats cJSON populated\n");
-//
-//     /* Add stats JSON according to add_stats */
-//     // char key[] = "topkeys";
-//     // char *stats_str = cJSON_PrintUnformatted(stats);
-//     // add_stats(key, (uint16_t)strlen(key),
-//     //           stats_str, (uint32_t)strlen(stats_str), cookie);
-//     // cJSON_Free(stats_str);
-//     // cJSON_Delete(stats);
-//
-//
-// }
 
 /**
  * Implementation of the "get_stats_struct" function in the engine
