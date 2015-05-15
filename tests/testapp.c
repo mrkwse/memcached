@@ -429,7 +429,11 @@ static cJSON *generate_config(const char *engine)
     strncat(cert_path, CERTIFICATE_PATH(testapp.cert), 256);
 
     cJSON_AddStringToObject(obj, "module", engine);
-    cJSON_AddStringToObject(obj, "config", "auto_create=false");
+    if (engine == BUCKET_ENGINE) {
+        cJSON_AddStringToObject(obj, "config", "auto_create=false");
+    } else {
+        cJSON_AddStringToObject(obj, "config", "");
+    }
     cJSON_AddItemReferenceToObject(root, "engine", obj);
 
     // obj = cJSON_CreateObject();
@@ -472,7 +476,6 @@ static cJSON *generate_config(const char *engine)
     cJSON_AddStringToObject(root, "admin", "");     //TODO may need changing for bucket auth
     cJSON_AddTrueToObject(root, "datatype_support");
     cJSON_AddStringToObject(root, "rbac_file", rbac_path);
-    // cJSON_AddNumberToObject(root, "verbosity", 2);
 
     return root;
 }
@@ -1133,62 +1136,18 @@ static enum test_return stop_memcached_server(void) {
     }
 #endif
 
-    remove(config_file);
-    remove(isasl_file);
-    free(isasl_file);
-    isasl_file = NULL;
-    remove(rbac_file);
+    // remove(config_file);
+    // remove(isasl_file);
+    // free(isasl_file);
+    // isasl_file = NULL;
+    // remove(rbac_file);
 
     return TEST_PASS;
 }
 
 // static enum test_return reset_memcached_server(void) {} ?
 
-static enum test_return start_bucket_server(void) {
 
-    // char config_file[] = "memcached_testapp.json.XXXXXX";
-    // char rbac_file[] = "testapp_rbac.json.XXXXXX";  //TODO check scope
-    putenv("MEMCACHED_TOP_KEYS=10");
-
-    cJSON *rbac = generate_rbac_config();
-    char *rbac_text = cJSON_Print(rbac);
-    if (cb_mktemp(rbac_file) == NULL) {
-        return TEST_FAIL;
-    }
-    if (write_config_to_file(rbac_text, rbac_file) == -1) {
-        return TEST_FAIL;
-    }
-    cJSON_Free(rbac_text);
-    cJSON_Delete(rbac);
-
-    json_config = generate_config(BUCKET_ENGINE);
-    config_string = cJSON_Print(json_config);
-    if (cb_mktemp(config_file) == NULL) {
-        return TEST_FAIL;
-    }
-    if (write_config_to_file(config_string, config_file) == -1) {
-        return TEST_FAIL;
-    }
-
-    char fname[1024];
-    snprintf(fname, sizeof(fname), "isasl.%lu.%lu.pw",
-             (unsigned long)getpid(),
-             (unsigned long)time(NULL));
-    isasl_file = strdup(fname);
-    cb_assert(isasl_file != NULL);
-
-    FILE *fp = fopen(isasl_file, "w");
-    cb_assert(fp != NULL);
-    fprintf(fp, "_admin password\n");
-    fclose(fp);
-    char env[1024];
-    snprintf(env, sizeof(env), "ISASL_PWFILE=%s", isasl_file);
-    putenv(strdup(env));
-
-    server_start_time = time(0);
-    server_pid = start_server(&port, &ssl_port, false, 600);
-    return TEST_PASS;
-}
 
 static ssize_t phase_send(const void *buf, size_t len) {
     ssize_t rv = 0, send_rv = 0;
@@ -2461,6 +2420,41 @@ static bool refresh_sasl() {
     safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
 
     return true;
+}
+
+static enum test_return start_bucket_server(void) {
+
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[1024];
+    } buffer;
+
+    putenv("MEMCACHED_TOP_KEYS=10");
+
+    cJSON *dynamic = generate_config(BUCKET_ENGINE);
+    char* dyn_string = NULL;
+    dyn_string = cJSON_Print(dynamic);
+    if (write_config_to_file(dyn_string, config_file) == -1) {
+        cJSON_Free(dyn_string);
+        return TEST_FAIL;
+    }
+    cJSON_Free(dyn_string);
+
+    server_start_time = time(0);
+    server_pid = start_server(&port, &ssl_port, false, 600);
+
+    // size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+    //                          PROTOCOL_BINARY_CMD_CONFIG_RELOAD, NULL, 0,
+    //                          NULL, 0);
+    //
+    // safe_send(buffer.bytes, len, false);
+    // safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+    // validate_response_header(&buffer.response,
+    //                          PROTOCOL_BINARY_CMD_CONFIG_RELOAD,
+    //                          PROTOCOL_BINARY_RESPONSE_SUCCESS);
+
+    return TEST_PASS;
 }
 
 static bool create_bucket() {
@@ -4624,7 +4618,7 @@ struct testcase testcases[] = {
     TESTCASE_PLAIN("vperror", test_vperror),
     TESTCASE_PLAIN("config_parser", test_config_parser),
     /* The following tests all run towards the same server */
-    // TESTCASE_SETUP("start_server", start_memcached_server),
+    TESTCASE_SETUP("start_server", start_memcached_server),
     TESTCASE_PLAIN_AND_SSL("connect", test_connect_to_server),
     TESTCASE_PLAIN_AND_SSL("noop", test_noop),
     TESTCASE_PLAIN_AND_SSL("sasl list mech", test_sasl_list_mech),
@@ -4706,13 +4700,13 @@ struct testcase testcases[] = {
     TESTCASE_PLAIN_AND_SSL("pipeline_1", test_pipeline_set_get_del),
     TESTCASE_PLAIN_AND_SSL("pipeline_2", test_pipeline_set_del),
     TESTCASE_PLAIN("exceed_max_packet_size", test_exceed_max_packet_size),
-    TESTCASE_CLEANUP("stop_server", stop_memcached_server),
+    TESTCASE_PLAIN("stop_server", stop_memcached_server),
     /* The following tests all run on an instance of memcached using
        bucket_engine in place of deafault_engine.                    */
-    TESTCASE_SETUP("start_bucket_server", start_bucket_server),
+    TESTCASE_PLAIN("start_bucket_server", start_bucket_server),
     // TESTCASE_SETUP("start_default_server", start_memcached_server),
     TESTCASE_PLAIN("connect", test_connect_to_server),
-    TESTCASE_PLAIN("bucket", create_bucket),
+    // TESTCASE_PLAIN("bucket", create_bucket),
     TESTCASE_PLAIN("topkeys", test_topkeys),
     TESTCASE_CLEANUP("stop_bucket_server", stop_memcached_server),
     TESTCASE_PLAIN(NULL, NULL)
