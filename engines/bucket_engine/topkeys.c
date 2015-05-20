@@ -146,7 +146,7 @@ static void tk_iterfunc(dlist_t *list, void *arg) {
     c->add_stat((char*)(it + 1), it->ti_nkey, val_str, vlen, c->cookie);
 }
 
-/*
+/**
  * Passing in a list of keys, context, and cJSON array will populate that
  * array with an object for each key in the following format:
  * {
@@ -191,7 +191,7 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
     return ENGINE_SUCCESS;
 }
 
-/*
+/**
  * Passing a set of topkeys, shards, and relevant context data will
  * return a cJSON object containing an array of topkeys (with each key
  * appearing as in the example above for tk_jsonfunc):
@@ -209,6 +209,8 @@ ENGINE_ERROR_CODE topkeys_json_stats(topkeys_t **tks, cJSON *object,
     cJSON *topkeys = cJSON_CreateArray();
     context.current_time = current_time;
     context.array = topkeys;
+
+    /* Iterate through each shard to collate the topkeys JSON object */
     for (ii = 0; ii < shards; ii++) {
         topkeys_t *tk = tks[ii];
         cb_assert(tk);
