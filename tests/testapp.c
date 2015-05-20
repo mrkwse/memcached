@@ -429,16 +429,16 @@ static cJSON *generate_config(const char *engine)
     strncat(cert_path, CERTIFICATE_PATH(testapp.cert), 256);
 
     cJSON_AddStringToObject(obj, "module", engine);
-    if (engine == BUCKET_ENGINE) {
+    if (strncmp(engine, BUCKET_ENGINE, strlen(BUCKET_ENGINE)) == 0) {
         cJSON_AddStringToObject(obj, "config", "auto_create=false");
     } else {
         cJSON_AddStringToObject(obj, "config", "");
     }
     cJSON_AddItemReferenceToObject(root, "engine", obj);
 
-    // obj = cJSON_CreateObject();
-    // cJSON_AddStringToObject(obj, "module", "blackhole_logger.so");
-    // cJSON_AddItemToArray(array, obj);
+    obj = cJSON_CreateObject();
+    cJSON_AddStringToObject(obj, "module", "blackhole_logger.so");
+    cJSON_AddItemToArray(array, obj);
     obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "module", "fragment_rw_ops.so");
     cJSON_AddStringToObject(obj, "config", "r=225;w=226");
@@ -473,7 +473,7 @@ static cJSON *generate_config(const char *engine)
     }
     cJSON_AddItemReferenceToObject(root, "interfaces", array);
 
-    cJSON_AddStringToObject(root, "admin", "");     //TODO may need changing for bucket auth
+    cJSON_AddStringToObject(root, "admin", "");
     cJSON_AddTrueToObject(root, "datatype_support");
     cJSON_AddStringToObject(root, "rbac_file", rbac_path);
 
@@ -804,6 +804,11 @@ static void reconnect_to_server(bool nonblocking) {
     }
 }
 
+static enum test_return test_reconnect_to_server(void) {
+    reconnect_to_server(false);
+    return TEST_PASS;
+}
+
 static enum test_return test_vperror(void) {
 #ifdef WIN32
     return TEST_SKIP;
@@ -1066,9 +1071,6 @@ static enum test_return test_config_parser(void) {
 
 static char *isasl_file;
 
-
-//FIXME - Memcached server starts with default engine (via json_config).
-//        Restart/new top-level test?
 static enum test_return start_memcached_server(void) {
     cJSON *rbac = generate_rbac_config();
     char *rbac_text = cJSON_Print(rbac);
@@ -1120,7 +1122,6 @@ static enum test_return test_connect_to_server(void) {
     return TEST_PASS;
 }
 
-//          test_return stop_memcached_server(bool restart) {} ?
 static enum test_return stop_memcached_server(void) {
     closesocket(sock);
     sock = INVALID_SOCKET;
@@ -1144,8 +1145,6 @@ static enum test_return stop_memcached_server(void) {
 
     return TEST_PASS;
 }
-
-// static enum test_return reset_memcached_server(void) {} ?
 
 
 
@@ -1310,7 +1309,7 @@ static bool safe_recv_packet(void *buf, size_t size) {
 
     return true;
 }
-//!!
+
 static off_t storage_command(char*buf,
                              size_t bufsz,
                              uint8_t cmd,
@@ -2384,7 +2383,7 @@ static off_t create_bucket_packet(char *buf,
     request->message.header.request.magic = PROTOCOL_BINARY_REQ;
     request->message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
     request->message.header.request.keylen = htons((uint16_t)key_len);
-    request->message.header.request.extlen = 0; //check
+    request->message.header.request.extlen = 0;
     request->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
     request->message.header.request.vbucket = 0x0000;
     request->message.header.request.bodylen = htonl((uint32_t)(key_len + 0 + dta_len));
@@ -2423,13 +2422,6 @@ static bool refresh_sasl() {
 }
 
 static enum test_return start_bucket_server(void) {
-
-    union {
-        protocol_binary_request_no_extras request;
-        protocol_binary_response_no_extras response;
-        char bytes[1024];
-    } buffer;
-
     putenv("MEMCACHED_TOP_KEYS=10");
 
     cJSON *dynamic = generate_config(BUCKET_ENGINE);
@@ -2443,17 +2435,6 @@ static enum test_return start_bucket_server(void) {
 
     server_start_time = time(0);
     server_pid = start_server(&port, &ssl_port, false, 600);
-
-    // size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-    //                          PROTOCOL_BINARY_CMD_CONFIG_RELOAD, NULL, 0,
-    //                          NULL, 0);
-    //
-    // safe_send(buffer.bytes, len, false);
-    // safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-    // validate_response_header(&buffer.response,
-    //                          PROTOCOL_BINARY_CMD_CONFIG_RELOAD,
-    //                          PROTOCOL_BINARY_RESPONSE_SUCCESS);
-
     return TEST_PASS;
 }
 
@@ -4704,9 +4685,7 @@ struct testcase testcases[] = {
     /* The following tests all run on an instance of memcached using
        bucket_engine in place of deafault_engine.                    */
     TESTCASE_PLAIN("start_bucket_server", start_bucket_server),
-    // TESTCASE_SETUP("start_default_server", start_memcached_server),
-    TESTCASE_PLAIN("connect", test_connect_to_server),
-    // TESTCASE_PLAIN("bucket", create_bucket),
+    TESTCASE_PLAIN("reconnect", test_reconnect_to_server),
     TESTCASE_PLAIN("topkeys", test_topkeys),
     TESTCASE_CLEANUP("stop_bucket_server", stop_memcached_server),
     TESTCASE_PLAIN(NULL, NULL)
