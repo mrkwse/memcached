@@ -127,6 +127,7 @@ struct tk_context {
     const void *cookie;
     ADD_STAT add_stat;
     rel_time_t current_time;
+    cJSON *array;
 };
 
 static void tk_iterfunc(dlist_t *list, void *arg) {
@@ -145,6 +146,32 @@ static void tk_iterfunc(dlist_t *list, void *arg) {
     c->add_stat((char*)(it + 1), it->ti_nkey, val_str, vlen, c->cookie);
 }
 
+/**
+ * Passing in a list of keys, context, and cJSON array will populate that
+ * array with an object for each key in the following format:
+ * {
+ *    "key": "somekey",
+ *    "access_count": nnn,
+ *    "ctime": ccc,
+ *    "atime": aaa
+ * }
+ */
+static void tk_jsonfunc(dlist_t *list, void *arg) {
+    struct tk_context *c = arg;
+    topkey_item_t *it = (topkey_item_t*)list;
+    cb_assert(it != NULL);
+    cJSON *key = cJSON_CreateObject();
+    cJSON_AddItemToObject(key, "key", cJSON_CreateString((char *)(it + 1)));
+    cJSON_AddItemToObject(key, "access_count",
+                          cJSON_CreateNumber(it->access_count));
+    cJSON_AddItemToObject(key, "ctime", cJSON_CreateNumber(c->current_time
+                                                           - it->ti_ctime));
+    cJSON_AddItemToObject(key, "atime", cJSON_CreateNumber(c->current_time
+                                                           - it->ti_atime));
+    cb_assert(c->array != NULL);
+    cJSON_AddItemToArray(c->array, key);
+}
+
 ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
                                 const void *cookie,
                                 const rel_time_t current_time,
@@ -161,6 +188,40 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tks, size_t shards,
         dlist_iter(&tk->list, tk_iterfunc, &context);
         cb_mutex_exit(&tk->mutex);
     }
+    return ENGINE_SUCCESS;
+}
+
+/**
+ * Passing a set of topkeys, shards, and relevant context data will
+ * return a cJSON object containing an array of topkeys (with each key
+ * appearing as in the example above for tk_jsonfunc):
+ * {
+ *   "topkeys": [
+ *      { ... }, ..., { ... }
+ *    ]
+ * }
+ */
+ENGINE_ERROR_CODE topkeys_json_stats(topkeys_t **tks, cJSON *object,
+                                     size_t shards,
+                                     const rel_time_t current_time) {
+    struct tk_context context;
+    size_t ii;
+    cJSON *topkeys = cJSON_CreateArray();
+    context.current_time = current_time;
+    context.array = topkeys;
+
+    /* Iterate through each shard to collate the topkeys JSON object */
+    for (ii = 0; ii < shards; ii++) {
+        topkeys_t *tk = tks[ii];
+        cb_assert(tk);
+        cb_mutex_enter(&tk->mutex);
+        dlist_t *p = &tk->list;
+        while((p = p->next) != &tk->list){
+            tk_jsonfunc(p, &context);
+        }
+        cb_mutex_exit(&tk->mutex);
+    }
+    cJSON_AddItemToObject(object, "topkeys", topkeys);
     return ENGINE_SUCCESS;
 }
 
