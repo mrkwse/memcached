@@ -1901,10 +1901,12 @@ static ENGINE_ERROR_CODE bucket_get_stats(ENGINE_HANDLE* handle,
     peh = get_engine_handle(handle, cookie);
 
     if (peh) {
+        /* Legacy topkeys returned */
         if (nkey == (sizeof("topkeys") - 1) &&
             memcmp("topkeys", stat_key, nkey) == 0) {
             rc = topkeys_stats(peh->topkeys, TK_SHARDS, cookie, get_current_time(),
                                add_stat);
+        /* JSON document topkeys returned */
         } else if (nkey == (sizeof("topkeys_json") - 1) &&
                   memcmp("topkeys_json", stat_key, nkey) == 0) {
             cJSON *stats = cJSON_CreateObject();

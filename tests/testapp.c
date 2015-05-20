@@ -2370,57 +2370,9 @@ static enum test_return test_stat_connections(void) {
     return TEST_PASS;
 }
 
-static off_t create_bucket_packet(char *buf,
-                                  size_t bufsz,
-                                  const void* key,
-                                  const size_t key_len,
-                                  const void* dta,
-                                  const size_t dta_len) {
-
-    protocol_binary_request_no_extras *request = (void*)buf;
-
-    memset(request->bytes, 0, sizeof(request));
-    request->message.header.request.magic = PROTOCOL_BINARY_REQ;
-    request->message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
-    request->message.header.request.keylen = htons((uint16_t)key_len);
-    request->message.header.request.extlen = 0;
-    request->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-    request->message.header.request.vbucket = 0x0000;
-    request->message.header.request.bodylen = htonl((uint32_t)(key_len + 0 + dta_len));
-    request->message.header.request.opaque = 0xdeadbeef;
-    request->message.header.request.cas = 0x0000000000000000;
-
-    off_t key_offset = sizeof(protocol_binary_request_create_bucket) +
-            request->message.header.request.extlen;
-
-    if (key != NULL) {
-        memcpy(buf + key_offset, key, key_len);
-    }
-    if (dta != NULL) {
-        memcpy(buf + key_offset + key_len, dta, dta_len);
-    }
-
-    return (off_t)(sizeof(*request) + key_len + dta_len + request->message.header.request.extlen);
-
-}
-
-static bool refresh_sasl() {
-    union {
-        protocol_binary_request_no_extras request;
-        protocol_binary_response_no_extras response;
-        char bytes[1024];
-    } buffer;
-
-    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
-                             PROTOCOL_BINARY_CMD_ISASL_REFRESH,
-                             NULL, 0, NULL, 0);
-
-    safe_send(buffer.bytes, len, false);
-    safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
-
-    return true;
-}
-
+/* Method to start an instance of memcached using the bucket engine
+ * (rather than default engine).
+ */
 static enum test_return start_bucket_server(void) {
     putenv("MEMCACHED_TOP_KEYS=10");
 
@@ -2438,6 +2390,69 @@ static enum test_return start_bucket_server(void) {
     return TEST_PASS;
 }
 
+/* Helper method to populate a request header with correct data
+ * when creating a new bucket within memcached.
+ */
+static off_t create_bucket_packet(char *buf,
+                                  size_t bufsz,
+                                  const void* key,
+                                  const size_t key_len,
+                                  const void* dta,
+                                  const size_t dta_len) {
+
+    protocol_binary_request_no_extras *request = (void*)buf;
+
+    memset(request->bytes, 0, sizeof(request));
+    request->message.header.request.magic = PROTOCOL_BINARY_REQ;
+    request->message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+    request->message.header.request.keylen = htons((uint16_t)key_len);
+    request->message.header.request.extlen = 0;
+    request->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+    request->message.header.request.vbucket = 0x0000;
+    request->message.header.request.bodylen = htonl((uint32_t)(key_len + 0
+                                                               + dta_len));
+    request->message.header.request.opaque = 0xdeadbeef;
+    request->message.header.request.cas = 0x0000000000000000;
+
+    off_t key_offset = sizeof(protocol_binary_request_create_bucket) +
+            request->message.header.request.extlen;
+
+    if (key != NULL) {
+        memcpy(buf + key_offset, key, key_len);
+    }
+    if (dta != NULL) {
+        memcpy(buf + key_offset + key_len, dta, dta_len);
+    }
+
+    return (off_t)(sizeof(*request) + key_len + dta_len +
+                   request->message.header.request.extlen);
+
+}
+
+/* Called to refresh memcached's list of usernames and passwords upon bucket
+ * creation so authentication can complete correctly and buckets can be
+ * connected to.
+ */
+static bool refresh_sasl() {
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[1024];
+    } buffer;
+
+    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                             PROTOCOL_BINARY_CMD_ISASL_REFRESH,
+                             NULL, 0, NULL, 0);
+
+    safe_send(buffer.bytes, len, false);
+    safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+
+    return true;
+}
+
+/* Called as part of test_topkeys setup, so the stats can be collected from
+ * a working bucket.
+ */
 static bool create_bucket() {
 
     union {
@@ -2461,7 +2476,8 @@ static bool create_bucket() {
                                      "uuid=6a43611b1af03543f7e320db3e209a57;"
                                      "vb0=true;");
 
-    const size_t val_len = snprintf(args, sizeof(args), "%s%c%s", engine, 0x00, config);
+    const size_t val_len = snprintf(args, sizeof(args), "%s%c%s", engine, 0x00,
+                                    config);
 
     const size_t key_len = strlen(name);
 
@@ -2487,6 +2503,9 @@ static bool create_bucket() {
     return true;
 }
 
+/* Used to throw operations at a bucket so that test_topkeys has a reasonable
+ * expected value to assert against.
+ */
 static bool propagate_bucket(int count) {
     int ii;
     size_t len;
@@ -2516,16 +2535,18 @@ static bool propagate_bucket(int count) {
     return true;
 }
 
-
+/* Test for JSON document formatted topkeys (part of bucket_engine). Creates
+ * a bucket, populates it, and then calls the topkeys_json stat subcommand
+ * against the bucket. Compares returned value against expected value according
+ * to populated data.
+ */
 static enum test_return test_topkeys(void) {
 
-
+    /* sum used to fill bucket and later check topkeys value against */
     int sum = 5;
     char *ptr;
 
     if (create_bucket()) {
-
-
 
         if (propagate_bucket(sum) == true) {
 
@@ -2538,11 +2559,14 @@ static enum test_return test_topkeys(void) {
 
             memset(buffer.bytes, 0, sizeof(buffer));
 
-
-            if (sasl_auth("test_bucket", "") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+            /* Assemble the topkeys_json stat command to the memcached instance
+             */
+            if (sasl_auth("test_bucket", "") ==
+                            PROTOCOL_BINARY_RESPONSE_SUCCESS) {
                 size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
                                          PROTOCOL_BINARY_CMD_STAT,
-                                         "topkeys_json", strlen("topkeys_json"), NULL, 0);
+                                         "topkeys_json", strlen("topkeys_json"),
+                                         NULL, 0);
                 safe_send(buffer.bytes, len, false);
 
             }
@@ -2558,7 +2582,8 @@ static enum test_return test_topkeys(void) {
             cJSON *topkeys = cJSON_CreateObject();
             topkeys = cJSON_Parse(ptr);
             cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
-                                          cJSON_GetObjectItem(topkeys, "topkeys"),
+                                          cJSON_GetObjectItem(topkeys,
+                                                              "topkeys"),
                                           0), "access_count")->valueint == sum);
 
             return TEST_PASS;

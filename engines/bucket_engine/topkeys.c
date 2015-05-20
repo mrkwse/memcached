@@ -209,6 +209,8 @@ ENGINE_ERROR_CODE topkeys_json_stats(topkeys_t **tks, cJSON *object,
     cJSON *topkeys = cJSON_CreateArray();
     context.current_time = current_time;
     context.array = topkeys;
+
+    /* Iterate through each shard to collate the topkeys JSON object */
     for (ii = 0; ii < shards; ii++) {
         topkeys_t *tk = tks[ii];
         cb_assert(tk);

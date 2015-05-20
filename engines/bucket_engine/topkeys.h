@@ -48,6 +48,20 @@ ENGINE_ERROR_CODE topkeys_stats(topkeys_t **tk, size_t n,
                                 const void *cookie,
                                 const rel_time_t current_time,
                                 ADD_STAT add_stat);
+/*
+ * Passing a set of topkeys, shards, and relevant context data will
+ * return a cJSON object containing an array of topkeys:
+ * {
+ *   "topkeys": [
+ *      {
+ *          "key": "somekey",
+ *          "access_count": nnn,
+ *          "ctime": ccc,
+ *          "atime": aaa
+ *      }, ..., { ... }
+ *    ]
+ * }
+ */
 ENGINE_ERROR_CODE topkeys_json_stats(topkeys_t **tks, cJSON *object,
                                 size_t shards,
                                 const rel_time_t current_time);
