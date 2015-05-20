@@ -80,6 +80,11 @@ enum test_result {
     PENDING = 19
 };
 
+typedef enum {
+    topkeys_standard,
+    topkeys_json,
+} topkeys_test_type;
+
 struct test {
     const char *name;
     enum test_result (*tfun)(ENGINE_HANDLE *, ENGINE_HANDLE_V1 *);
@@ -1645,7 +1650,14 @@ static enum test_result test_concurrent_connect_disconnect_tap(ENGINE_HANDLE *h,
     return SUCCESS;
 }
 
-static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
+
+/**
+ * test_topkeys takes the usual engine handles, as well as a test_type format
+ * flag to determine which topkeys format to retrieve, the legacy default
+ * 'topkeys_standard' or the newer JSON format 'topkeys_json'
+ */
+static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1,
+                                     topkeys_test_type format) {
     ENGINE_ERROR_CODE rv = ENGINE_SUCCESS;
     const void *adm_cookie = mk_conn("admin", NULL);
     int cmd;
@@ -1668,13 +1680,40 @@ static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1) {
         free(pkt);
     }
 
-    rv = h1->get_stats(h, adm_cookie, "topkeys", 7, add_stats);
-    cb_assert(rv == ENGINE_SUCCESS);
-    cb_assert(genhash_size(stats_hash) == 1);
-    val = reinterpret_cast<char*>(genhash_find(stats_hash, "somekey", strlen("somekey")));
-    cb_assert(val != NULL);
-    cb_assert(strstr(val, "get_hits=10") != NULL);
+    if (format == topkeys_standard) {
+        rv = h1->get_stats(h, adm_cookie, "topkeys", 7, add_stats);
+        cb_assert(rv == ENGINE_SUCCESS);
+        cb_assert(genhash_size(stats_hash) == 1);
+        val = reinterpret_cast<char*>(genhash_find(stats_hash, "somekey",
+                                                  strlen("somekey")));
+        cb_assert(val != NULL);
+        cb_assert(strstr(val, "get_hits=10") != NULL);
+    } else if (format == topkeys_json){
+        /* Assert that the JSON object has a count of 10 operations from previous
+           operations if JSON test called */
+        cJSON *stats = cJSON_CreateObject();
+        rv = h1->get_stats(h, adm_cookie, "topkeys_json",
+                           strlen("topkeys_json"), add_stats);
+        val = reinterpret_cast<char*>(genhash_find(stats_hash, "topkeys_json",
+                                                  strlen("topkeys_json")));
+        cb_assert(val != NULL);
+        stats = cJSON_Parse(val);
+        cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
+                                      cJSON_GetObjectItem(stats, "topkeys"),
+                                      0), "access_count")->valueint == 10);
+    }
+
     return SUCCESS;
+}
+
+static enum test_result test_topkeys_standard(ENGINE_HANDLE *h,
+                                              ENGINE_HANDLE_V1 *h1) {
+    return test_topkeys(h, h1, topkeys_standard);
+}
+
+static enum test_result test_topkeys_json(ENGINE_HANDLE *h,
+                                          ENGINE_HANDLE_V1 *h1) {
+    return test_topkeys(h, h1, topkeys_json);
 }
 
 static engine_reference* engine_ref = NULL;
@@ -1957,7 +1996,8 @@ int main(int argc, char **argv) {
          test_concurrent_connect_disconnect, NULL },
         {"concurrent connect/disconnect (tap)",
          test_concurrent_connect_disconnect_tap, NULL },
-        {"topkeys", test_topkeys, NULL },
+        {"topkeys", test_topkeys_standard, NULL },
+        {"jsonic topkeys", test_topkeys_json, NULL },
         {NULL, NULL, NULL}
     };
 
