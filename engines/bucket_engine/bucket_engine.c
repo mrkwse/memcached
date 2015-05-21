@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <cJSON.h>
 
 #include <memcached/engine.h>
 #include <platform/platform.h>

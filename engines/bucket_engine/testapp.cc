@@ -11,6 +11,7 @@
 #include <time.h>
 #include <errno.h>
 #include <platform/platform.h>
+#include <cJSON.h>
 
 #include "genhash.h"
 
@@ -1684,18 +1685,20 @@ static enum test_result test_topkeys(ENGINE_HANDLE *h, ENGINE_HANDLE_V1 *h1,
         rv = h1->get_stats(h, adm_cookie, "topkeys", 7, add_stats);
         cb_assert(rv == ENGINE_SUCCESS);
         cb_assert(genhash_size(stats_hash) == 1);
-        val = reinterpret_cast<char*>(genhash_find(stats_hash, "somekey",
-                                                  strlen("somekey")));
+        val = reinterpret_cast<char*>(genhash_find(stats_hash,
+                                                   "somekey",
+                                                   strlen("somekey")));
         cb_assert(val != NULL);
         cb_assert(strstr(val, "get_hits=10") != NULL);
     } else if (format == topkeys_json){
-        /* Assert that the JSON object has a count of 10 operations from previous
+        /* Assert that the JSON object has count of 10 operations from previous
            operations if JSON test called */
         cJSON *stats = cJSON_CreateObject();
         rv = h1->get_stats(h, adm_cookie, "topkeys_json",
                            strlen("topkeys_json"), add_stats);
-        val = reinterpret_cast<char*>(genhash_find(stats_hash, "topkeys_json",
-                                                  strlen("topkeys_json")));
+        val = reinterpret_cast<char*>(genhash_find(stats_hash,
+                                                   "topkeys_json",
+                                                   strlen("topkeys_json")));
         cb_assert(val != NULL);
         stats = cJSON_Parse(val);
         cb_assert(cJSON_GetObjectItem(cJSON_GetArrayItem(
@@ -1716,12 +1719,14 @@ static enum test_result test_topkeys_json(ENGINE_HANDLE *h,
     return test_topkeys(h, h1, topkeys_json);
 }
 
+
 static engine_reference* engine_ref = NULL;
 
 static ENGINE_HANDLE_V1 *start_your_engines(const char *cfg) {
 
     ENGINE_HANDLE *h = NULL;
-    if ((engine_ref = load_engine(BUCKET_ENGINE_PATH, &stderr_logger_descriptor)) == NULL){
+    if ((engine_ref =
+         load_engine(BUCKET_ENGINE_PATH, &stderr_logger_descriptor)) == NULL){
         fprintf(stderr, "Failed to load engine\n");
         return NULL;
     }

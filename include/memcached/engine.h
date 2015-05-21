@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <cJSON.h>
 
 #include "memcached/types.h"
 #include "memcached/protocol_binary.h"

@@ -87,8 +87,8 @@ static void dlist_insert_after(dlist_t *list, dlist_t *new) {
 }
 
 static void dlist_iter(dlist_t *list,
-                              void (*iterfunc)(dlist_t *item, void *arg),
-                              void *arg)
+                       void (*iterfunc)(dlist_t *item, void *arg),
+                       void *arg)
 {
     dlist_t *p = list;
     while ((p = p->next) != list) {
@@ -146,7 +146,7 @@ static void tk_iterfunc(dlist_t *list, void *arg) {
     c->add_stat((char*)(it + 1), it->ti_nkey, val_str, vlen, c->cookie);
 }
 
-/*
+/**
  * Passing in a list of keys, context, and cJSON array will populate that
  * array with an object for each key in the following format:
  * {

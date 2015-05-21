@@ -54,6 +54,16 @@ protected:
     virtual void TearDown();
 };
 
+class McdBucketTest : public McdTestappTest {
+public:
+
+    static void SetUpTestCase();
+
+protected:
+
+    virtual void SetUp();
+};
+
 /* Compress the given document. Returns the size of the compressed document,
  * and deflated is updated to point to the compressed buffer.
  * 'deflated' should be freed by the caller when no longer needed.

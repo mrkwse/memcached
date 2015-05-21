@@ -55,6 +55,11 @@ char rbac_file[] = "testapp_rbac.json.XXXXXX";
 #define phase_max 4
 static int current_phase = 0;
 
+/* engine types */
+#define BLOCK_ENGINE "ewouldblock_engine.so"
+#define DEFAULT_ENGINE "default_engine.so"
+#define BUCKET_ENGINE "bucket_engine.so"
+
 static pid_t server_pid;
 static in_port_t port = -1;
 static in_port_t ssl_port = -1;
@@ -81,9 +86,12 @@ static char mcd_port_filename_env[80];
 static char isasl_pwfile_env[1024];
 
 static enum test_return start_memcached_server(void);
+static enum test_return start_bucket_server(void);
 static enum test_return stop_memcached_server(void);
 static void connect_to_server_plain(in_port_t port, bool nonblocking);
 static void connect_to_server_ssl(in_port_t ssl_port, bool nonblocking);
+
+static uint16_t sasl_auth(const char *username, const char *password);
 
 static void destroy_ssl_socket();
 static void ewouldblock_engine_configure(EWBEngine_Mode mode, uint32_t value);
@@ -139,6 +147,20 @@ void McdTestappTest::TearDown() {
     }
 }
 
+void McdBucketTest::SetUpTestCase() {
+    ASSERT_EQ(TEST_PASS, start_bucket_server());
+}
+
+void McdBucketTest::SetUp() {
+    if (GetParam() == Transport::Plain) {
+        current_phase = phase_plain;
+        connect_to_server_plain(port, false);
+    } else {
+        current_phase = phase_ssl;
+        connect_to_server_ssl(ssl_port, false);
+    }
+}
+
 #ifdef WIN32
 static void log_network_error(const char* prefix) {
     LPVOID error_msg;
@@ -181,7 +203,7 @@ static void get_working_current_directory(char* out_buf, int out_buf_len) {
     }
 }
 
-static cJSON *generate_config(void)
+static cJSON *generate_config(const char *engine)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON *array = cJSON_CreateArray();
@@ -197,9 +219,15 @@ static cJSON *generate_config(void)
     strncat(pem_path, CERTIFICATE_PATH(testapp.pem), 256);
     strncat(cert_path, CERTIFICATE_PATH(testapp.cert), 256);
 
-    cJSON_AddStringToObject(obj, "module", "ewouldblock_engine.so");
-    cJSON_AddStringToObject(obj, "config", "default_engine.so");
-    cJSON_AddItemToObject(root, "engine", obj);
+    cJSON_AddStringToObject(obj, "module", engine);
+
+    if (strncmp(engine, BUCKET_ENGINE, strlen(BUCKET_ENGINE)) == 0) {
+        cJSON_AddStringToObject(obj, "config", "auto_create=false");
+    } else if (strncmp(engine, BLOCK_ENGINE, strlen(BLOCK_ENGINE)) == 0) {
+        cJSON_AddStringToObject(obj, "config", DEFAULT_ENGINE);
+    }
+
+    cJSON_AddItemReferenceToObject(root, "engine", obj);
 
     obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "module", "blackhole_logger.so");
@@ -613,7 +641,7 @@ static enum test_return start_memcached_server(void) {
         return TEST_FAIL;
     }
 
-    cJSON *json_config = generate_config();
+    cJSON *json_config = generate_config(BLOCK_ENGINE);
     config_string = cJSON_Print(json_config);
     cJSON_Delete(json_config);
     if (write_config_to_file(config_string, config_file) == -1) {
@@ -640,6 +668,60 @@ static enum test_return start_memcached_server(void) {
     server_pid = start_server(&port, &ssl_port, false, 600);
     return TEST_PASS;
 }
+
+/**
+ * Method to start an instance of memcached using the bucket engine
+ * (rather than default engine).
+ */
+static enum test_return start_bucket_server(void) {
+    cJSON *rbac = generate_rbac_config();
+    char *rbac_text = cJSON_Print(rbac);
+
+    char topkeys_count_env[] = "MEMCACHED_TOP_KEYS=10";
+    putenv(topkeys_count_env);
+
+    if (cb_mktemp(rbac_file) == NULL) {
+        return TEST_FAIL;
+    }
+    if (write_config_to_file(rbac_text, rbac_file) == -1) {
+        return TEST_FAIL;
+    }
+    cJSON_Free(rbac_text);
+    cJSON_Delete(rbac);
+
+    if (cb_mktemp(config_file) == NULL) {
+        return TEST_FAIL;
+    }
+
+    cJSON *json_config = generate_config(BUCKET_ENGINE);
+    config_string = cJSON_Print(json_config);
+    cJSON_Delete(json_config);
+    if (write_config_to_file(config_string, config_file) == -1) {
+        return TEST_FAIL;
+    }
+
+    char fname[1024];
+    snprintf(fname, sizeof(fname), "isasl.%lu.%lu.pw",
+             (unsigned long)getpid(),
+             (unsigned long)time(NULL));
+    isasl_file = strdup(fname);
+    cb_assert(isasl_file != NULL);
+
+    FILE *fp = fopen(isasl_file, "w");
+    cb_assert(fp != NULL);
+    fprintf(fp, "_admin password \n");
+    fclose(fp);
+
+    snprintf(isasl_pwfile_env, sizeof(isasl_pwfile_env), "ISASL_PWFILE=%s",
+             isasl_file);
+    putenv(isasl_pwfile_env);
+
+    server_start_time = time(0);
+    server_pid = start_server(&port, &ssl_port, false, 600);
+    return TEST_PASS;
+
+}
+
 
 static enum test_return stop_memcached_server(void) {
     closesocket(sock);
@@ -1912,6 +1994,291 @@ TEST_P(McdTestappTest, StatConnections) {
     } while (buffer.response.message.header.response.keylen != 0);
 }
 
+
+/**
+ * Helper method to populate a request header with correct data
+ * when creating a new bucket within memcached.
+ */
+static off_t create_bucket_packet(char *buf,
+                                  size_t bufsz,
+                                  const void* key,
+                                  const size_t key_len,
+                                  const void* dta,
+                                  const size_t dta_len) {
+
+    protocol_binary_request_no_extras *request =
+        reinterpret_cast<protocol_binary_request_no_extras*>(buf);
+
+    memset(request->bytes, 0, sizeof(request));
+    request->message.header.request.magic = PROTOCOL_BINARY_REQ;
+    request->message.header.request.opcode = PROTOCOL_BINARY_CMD_CREATE_BUCKET;
+    request->message.header.request.keylen = htons((uint16_t)key_len);
+    request->message.header.request.extlen = 0;
+    request->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+    request->message.header.request.vbucket = 0x0000;
+    request->message.header.request.bodylen = htonl((uint32_t)(key_len + 0
+                                                               + dta_len));
+    request->message.header.request.opaque = 0xdeadbeef;
+    request->message.header.request.cas = 0x0000000000000000;
+
+    off_t key_offset = sizeof(protocol_binary_request_create_bucket) +
+            request->message.header.request.extlen;
+
+    if (key != NULL) {
+        memcpy(buf + key_offset, key, key_len);
+    }
+    if (dta != NULL) {
+        memcpy(buf + key_offset + key_len, dta, dta_len);
+    }
+
+    return (off_t)(sizeof(*request) + key_len + dta_len +
+                   request->message.header.request.extlen);
+
+}
+
+static off_t delete_bucket_packet(char *buf,
+                                  size_t bufsz,
+                                  const void* key,
+                                  const size_t key_len,
+                                  const void* dta,
+                                  const size_t dta_len) {
+
+    protocol_binary_request_no_extras *request =
+        reinterpret_cast<protocol_binary_request_no_extras*>(buf);
+
+    memset(request->bytes, 0, sizeof(request));
+    request->message.header.request.magic = PROTOCOL_BINARY_REQ;
+    request->message.header.request.opcode = PROTOCOL_BINARY_CMD_DELETE_BUCKET;
+    request->message.header.request.keylen = htons((uint16_t)key_len);
+    request->message.header.request.extlen = 0;
+    request->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+    request->message.header.request.vbucket = 0x0000;
+    request->message.header.request.bodylen = htonl((uint32_t)(key_len + 0 +
+                                                               + dta_len));
+    request->message.header.request.opaque = 0xdeadbeef;
+    request->message.header.request.cas = 0x0000000000000000;
+
+    off_t key_offset = sizeof(protocol_binary_request_delete_bucket) +
+            request->message.header.request.extlen;
+
+    if (key != NULL) {
+        memcpy(buf + key_offset, key, key_len);
+    }
+    if (dta != NULL) {
+        memcpy(buf + key_offset + key_len, dta, dta_len);
+    }
+
+    return (off_t)(sizeof(*request) + key_len + dta_len +
+                   request->message.header.request.extlen);
+}
+
+/**
+ * Called to refresh memcached's list of usernames and passwords upon bucket
+ * creation so authentication can complete correctly and buckets can be
+ * connected to.
+ */
+static bool refresh_sasl() {
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[1024];
+    } buffer;
+
+    size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                             PROTOCOL_BINARY_CMD_ISASL_REFRESH,
+                             NULL, 0, NULL, 0);
+
+    safe_send(buffer.bytes, len, false);
+    safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+
+    return true;
+}
+
+/**
+ * Called as part of test_topkeys setup, so the stats can be collected from
+ * a working bucket.
+ */
+static bool create_bucket() {
+
+    union {
+        protocol_binary_request_create_bucket req;
+        char buffer[1024];
+    } request;
+
+    char name[] = "test_bucket";
+    char engine[] = DEFAULT_ENGINE;
+    char args[1024];
+    char config[1024];
+
+    FILE *fp = fopen(isasl_file, "a");
+    cb_assert(fp != NULL);
+    fprintf(fp, "%s \n", name);
+    fclose(fp);
+
+    cb_assert(refresh_sasl() == true);
+
+    snprintf(config, sizeof(config), "cache_size=1293942784;"
+                                     "uuid=6a43611b1af03543f7e320db3e209a57;"
+                                     "vb0=true;");
+
+    const size_t val_len = snprintf(args, sizeof(args), "%s%c%s", engine, 0x00,
+                                    config);
+
+    const size_t key_len = strlen(name);
+
+    size_t len = create_bucket_packet(request.buffer, sizeof(request.buffer),
+                                      name, key_len, args,
+                                      val_len);
+
+    if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+        safe_send(request.buffer, len, false);
+    }
+
+    union {
+        protocol_binary_response_no_extras res;
+        char buffer[1024];
+    } response;
+
+    safe_recv_packet(response.buffer, sizeof(response.buffer));
+    validate_response_header(&response.res,
+                             PROTOCOL_BINARY_CMD_CREATE_BUCKET,
+                             PROTOCOL_BINARY_RESPONSE_SUCCESS);
+
+
+    return true;
+}
+
+static bool delete_bucket() {
+
+    union {
+        protocol_binary_request_delete_bucket req;
+        char buffer[1024];
+    } request;
+
+    char name[] = "test_bucket";
+    char value[] = "force=true";
+
+    const size_t key_len = strlen(name);
+    const size_t val_len = strlen(value);
+
+    size_t len = delete_bucket_packet(request.buffer, sizeof(request.buffer),
+                                      name, key_len, value, val_len);
+
+    if (sasl_auth("_admin", "password") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+        safe_send(request.buffer, len, false);
+    }
+
+    union {
+        protocol_binary_response_no_extras res;
+        char buffer[1024];
+    } response;
+
+    safe_recv_packet(response.buffer, sizeof(response.buffer));
+    validate_response_header(&response.res,
+                             PROTOCOL_BINARY_CMD_DELETE_BUCKET,
+                             PROTOCOL_BINARY_RESPONSE_SUCCESS);
+
+    return true;
+
+}
+
+/**
+ * Used to throw operations at a bucket so that test_topkeys has a reasonable
+ * expected value to assert against.
+ */
+static bool propagate_bucket(int count) {
+    int ii;
+    size_t len;
+
+
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[1024];
+    } buffer;
+
+    for (ii = 0; ii < count; ii++) {
+
+        len = storage_command(buffer.bytes, sizeof(buffer.bytes),
+                              PROTOCOL_BINARY_CMD_SET, "somekey", 7,
+                              "someval", 7, 0, 0);
+
+        if (sasl_auth("test_bucket", "") == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+            safe_send(buffer.bytes, len, false);
+
+            safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+            validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_SET,
+                                     PROTOCOL_BINARY_RESPONSE_SUCCESS);
+         }
+    }
+
+    return true;
+}
+
+/**
+ * Test for JSON document formatted topkeys (part of bucket_engine). Creates
+ * a bucket, populates it, and then calls the topkeys_json stat subcommand
+ * against the bucket. Compares returned value against expected value according
+ * to populated data.
+ */
+TEST_P(McdBucketTest, test_topkeys) {
+
+    /* sum used to fill bucket and later check topkeys value against */
+    int sum = 5;
+    char *ptr;
+
+    if (create_bucket()) {
+
+        if (propagate_bucket(sum) == true) {
+
+
+            union {
+                protocol_binary_request_no_extras request;
+                protocol_binary_response_no_extras response;
+                char bytes[2048];
+            } buffer;
+
+            memset(buffer.bytes, 0, sizeof(buffer));
+
+            /* Assemble the topkeys_json stat command to the memcached instance
+             */
+            if (sasl_auth("test_bucket", "") ==
+                            PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+                size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
+                                         PROTOCOL_BINARY_CMD_STAT,
+                                         "topkeys_json", strlen("topkeys_json"),
+                                         NULL, 0);
+                safe_send(buffer.bytes, len, false);
+
+            }
+
+            do {
+                safe_recv_packet(buffer.bytes, sizeof(buffer.bytes));
+                validate_response_header(&buffer.response, PROTOCOL_BINARY_CMD_STAT,
+                                         PROTOCOL_BINARY_RESPONSE_SUCCESS);
+                if (buffer.response.message.header.response.keylen != 0) {
+                    ptr = buffer.bytes + (sizeof(buffer.response) +
+                             buffer.response.message.header.response.keylen
+                             + buffer.response.message.header.response.extlen);
+                    }
+            } while (buffer.response.message.header.response.keylen != 0);
+
+
+
+            cJSON *topkeys = cJSON_CreateObject();
+            topkeys = cJSON_Parse(ptr);
+            int return_value = cJSON_GetObjectItem(cJSON_GetArrayItem(
+                                    cJSON_GetObjectItem(topkeys, "topkeys"),
+                                                        0),
+                                "access_count")->valueint;
+                cb_assert(return_value == sum);
+        }
+
+    delete_bucket();
+
+    }
+}
+
 TEST_P(McdTestappTest, Scrub) {
     union {
         protocol_binary_request_no_extras request;
@@ -2321,7 +2688,7 @@ TEST_P(McdTestappTest, Config_Validate) {
 
     /* 'interfaces' - should be able to change max connections */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config(BLOCK_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2368,7 +2735,7 @@ TEST_P(McdTestappTest, Config_Reload) {
 
     /* Change max_conns on first interface. */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config(BLOCK_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2395,7 +2762,7 @@ TEST_P(McdTestappTest, Config_Reload) {
 
     /* Change backlog on first interface. */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config(BLOCK_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2422,7 +2789,7 @@ TEST_P(McdTestappTest, Config_Reload) {
 
     /* Change tcp_nodelay on first interface. */
     {
-        cJSON *dynamic = generate_config();
+        cJSON *dynamic = generate_config(BLOCK_ENGINE);
         char* dyn_string = NULL;
         cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
         cJSON *iface = cJSON_GetArrayItem(iface_list, 0);
@@ -2447,7 +2814,7 @@ TEST_P(McdTestappTest, Config_Reload) {
     }
 
     /* Restore original configuration. */
-    cJSON *dynamic = generate_config();
+    cJSON *dynamic = generate_config(BLOCK_ENGINE);
     char* dyn_string = cJSON_Print(dynamic);
     cJSON_Delete(dynamic);
     if (write_config_to_file(dyn_string, config_file) == -1) {
@@ -2479,7 +2846,7 @@ TEST_P(McdTestappTest, Config_Reload_SSL) {
     }
 
     /* Change ssl cert/key on second interface. */
-    cJSON *dynamic = generate_config();
+    cJSON *dynamic = generate_config(BLOCK_ENGINE);
     char* dyn_string = NULL;
     cJSON *iface_list = cJSON_GetObjectItem(dynamic, "interfaces");
     cJSON *iface = cJSON_GetArrayItem(iface_list, 1);
@@ -3753,4 +4120,8 @@ TEST_P(McdTestappTest, ExceedMaxPacketSize)
 
 INSTANTIATE_TEST_CASE_P(PlainOrSSL,
                         McdTestappTest,
+                        ::testing::Values(Transport::Plain, Transport::SSL));
+
+INSTANTIATE_TEST_CASE_P(PlainOrSSL,
+                        McdBucketTest,
                         ::testing::Values(Transport::Plain, Transport::SSL));
