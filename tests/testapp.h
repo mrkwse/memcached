@@ -38,6 +38,11 @@ enum class Transport {
     SSL
 };
 
+typedef enum {
+    blocker_engine,
+    bucket_engine
+} Engine_Type;
+
 
 // Needed by subdocument tests in seperate .cc file.
 extern SOCKET sock;
@@ -66,7 +71,8 @@ protected:
     // per test tear-down function.
     virtual void TearDown();
 
-    static cJSON* generate_config(int num_threads = -1);
+    static cJSON* generate_config(Engine_Type engine = blocker_engine,
+                                  int num_threads = -1);
 
     static void start_memcached_server(cJSON* config);
 
@@ -86,6 +92,17 @@ protected:
                             bool pipeline, int iterations, int message_size);
 
     void test_subdoc_dict_add_cas(bool compress, protocol_binary_command cmd);
+};
+
+class McdBucketTest : public McdTestappTest {
+public:
+
+    static void SetUpTestCase();
+
+protected:
+
+    virtual void SetUp();
+
 };
 
 SOCKET connect_to_server_plain(in_port_t port, bool nonblocking);

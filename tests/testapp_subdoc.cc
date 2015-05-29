@@ -1441,7 +1441,7 @@ public:
     static void SetUpTestCase() {
         // Change the number of worker threads to one so we guarantee that
         // multiple connections are handled by a single worker.
-        cJSON *config = generate_config(1);
+        cJSON *config = generate_config(blocker_engine, 1);
         start_memcached_server(config);
         cJSON_Delete(config);
         CreateTestBucket();
