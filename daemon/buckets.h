@@ -17,6 +17,7 @@
 #pragma once
 
 #include <memcached/engine.h>
+#include "topkeys.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -102,7 +103,7 @@ extern "C" {
         /**
          * Topkeys
          */
-        void *topkeys;
+        topkeys_t **topkeys;
 
     } bucket_t;
 

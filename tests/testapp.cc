@@ -3931,7 +3931,7 @@ void refresh_sasl() {
  * Called as part of test_topkeys setup, so the stats can be collected from
  * a working bucket.
  */
-void create_bucket() {
+void create_bucket(const std::string& name, const int mem_quota) {
 
     union {
         protocol_binary_request_create_bucket req;
@@ -3939,13 +3939,16 @@ void create_bucket() {
     } request;
 
     // Bucket name
-    const std::string name = "test_bucket";
+    // const std::string bucket_name = "test_bucket";
     // Engine type
     const std::string engine = DEFAULT_ENGINE;
     // Configuratrion string. cache_size == memory allocated
-    const std::string config("\0cache_size=1048576;", 23);
+    // const std::string config("\0cache_size=1048576;", 23);
+    const std::string split("\0", 1);
+    const std::string config = "cache_size=" + std::to_string(mem_quota) + ";";
     // Combined packet body string
-    const std::string args = engine + config;
+    const std::string args = engine + split + config;
+    // @TODO check above args combo valid
 
 
     FILE *fp = fopen(isasl_file, "a");
@@ -4050,8 +4053,10 @@ TEST_P(McdBucketTest, test_topkeys) {
     /* sum used to fill bucket and later check topkeys value against */
     const int sum = 5;
     char *response_string = NULL;
+    std::string name = 'test_bucket'
 
-    create_bucket();
+    // @TODO check mem_used (2nd param) is correctly typed as int
+    create_bucket(name, 1048576);
 
     populate_bucket(sum);
 
@@ -4066,7 +4071,7 @@ TEST_P(McdBucketTest, test_topkeys) {
 
     /* Assemble the topkeys_json stat command to the memcached instance
      */
-    ASSERT_EQ(sasl_auth("test_bucket", ""), PROTOCOL_BINARY_RESPONSE_SUCCESS);
+    ASSERT_EQ(sasl_auth(name.c_str(), ""), PROTOCOL_BINARY_RESPONSE_SUCCESS);
     size_t len = raw_command(buffer.bytes, sizeof(buffer.bytes),
                              PROTOCOL_BINARY_CMD_STAT,
                              "topkeys_json", strlen("topkeys_json"),

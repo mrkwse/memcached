@@ -289,7 +289,6 @@ TARGET_LINK_LIBRARIES(cbsasl platform)
 # Add linker flags to all of the binaries
 #
 
-TARGET_LINK_LIBRARIES(bucket_engine cJSON mcd_util platform ${COUCHBASE_NETWORK_LIBS} ${COUCHBASE_MATH_LIBS})
 TARGET_LINK_LIBRARIES(default_engine mcd_util platform ${COUCHBASE_NETWORK_LIBS})
 TARGET_LINK_LIBRARIES(ewouldblock_engine mcd_util)
 
@@ -298,7 +297,6 @@ TARGET_LINK_LIBRARIES(stdin_term_handler platform)
 TARGET_LINK_LIBRARIES(engine_testapp mcd_util platform ${MALLOC_LIBRARIES} ${COUCHBASE_NETWORK_LIBS})
 APPEND_MALLOC_LINKER_FLAGS(engine_testapp)
 
-TARGET_LINK_LIBRARIES(bucket_engine_testapp cJSON mcd_util platform ${COUCHBASE_NETWORK_LIBS} ${COUCHBASE_MATH_LIBS})
 TARGET_LINK_LIBRARIES(tap_mock_engine platform ${COUCHBASE_NETWORK_LIBS})
 TARGET_LINK_LIBRARIES(testapp_extension mcd_util platform ${COUCHBASE_NETWORK_LIBS})
 TARGET_LINK_LIBRARIES(mcd_util platform)
